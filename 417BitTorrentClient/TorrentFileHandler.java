@@ -1,4 +1,3 @@
-package example;
 /*
  * Copyright 2006 Robert Sterling Moore II
  * 

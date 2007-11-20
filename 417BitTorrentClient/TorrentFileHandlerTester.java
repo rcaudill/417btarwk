@@ -1,4 +1,3 @@
-package example;
 /*
  * Copyright 2006 Robert Sterling Moore II
  * 
@@ -45,7 +44,7 @@ public class TorrentFileHandlerTester
 	 */
 	public void testTorrentFileHandler() {
 		torrent_file_handler = new TorrentFileHandler();
-		torrent_file = torrent_file_handler.openTorrentFile("breezy-live-i386.iso.torrent");
+		torrent_file = torrent_file_handler.openTorrentFile("OOo_2.3.0_Win32Intel_install_wJRE_en-US.exe.torrent");
 		
 		if (torrent_file != null) {
 			System.out.println("Tracker URL: " + torrent_file.tracker_url);
