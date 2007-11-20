@@ -1,4 +1,3 @@
-package example;
 /*
  * Copyright 2006 Robert Sterling Moore II This computer program is free
  * software; you can redistribute it and/or modify it under the terms of the GNU
