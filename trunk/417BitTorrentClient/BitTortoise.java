@@ -44,19 +44,12 @@ public class BitTortoise
 					"left="+torrentFile.file_length+"&"+
 					"peer_id="+torrentFile.info_hash_as_url+"&"+
 					"port="+"6881").openConnection());
-			System.out.println(connection.getURL().toString());
 			connection.setRequestMethod("GET");
 			connection.connect();
 			
 			/*get's the reply from the tracker*/
 			InputStream in = connection.getInputStream();
-			byte[] buffer = new byte[1024];
-			int result = in.read(buffer);
-			
-			while (result != -1) {
-				System.out.write(buffer,0,result);
-				result =in.read(buffer);
-			}
+			Object response = Bencoder.bdecode(in);
 			
 			/*i did this in my example, i'm going to check if i need to keep these open. -andrew*/
 			//in.close();
