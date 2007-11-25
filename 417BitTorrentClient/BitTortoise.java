@@ -9,6 +9,7 @@
  */
 
 import java.io.*;
+import java.util.ArrayList;
 
 public class BitTortoise
 {
@@ -38,6 +39,12 @@ public class BitTortoise
 		}
 		
 		// Using the parsed torrent file, ping the tracker and get a list of peers to connect to:
+		
+		//peerList = pingTracker(...)?;
+		ArrayList peers = new ArrayList();
+		//for each p in peerList {
+			//peers.add(new Peer(p.pstr, p.reserved, p.info_hash, p.peer_id));
+		//}
 		
 		try
 		{
