@@ -1,0 +1,10 @@
+/home/rcaudill/workspace/.metadata/.plugins/org.eclipse.jdt.core/2347385839.index
+/home/rcaudill/workspace/.metadata/.plugins/org.eclipse.jdt.core/463380126.index
+/home/rcaudill/workspace/.metadata/.plugins/org.eclipse.jdt.core/1142852553.index
+/home/rcaudill/workspace/.metadata/.plugins/org.eclipse.jdt.core/41004285.index
+/home/rcaudill/workspace/.metadata/.plugins/org.eclipse.jdt.core/4072306699.index
+/home/rcaudill/workspace/.metadata/.plugins/org.eclipse.jdt.core/1739077515.index
+/home/rcaudill/workspace/.metadata/.plugins/org.eclipse.jdt.core/1035106415.index
+/home/rcaudill/workspace/.metadata/.plugins/org.eclipse.jdt.core/904579873.index
+/home/rcaudill/workspace/.metadata/.plugins/org.eclipse.jdt.core/3830062150.index
+/home/rcaudill/workspace/.metadata/.plugins/org.eclipse.jdt.core/3322406279.index

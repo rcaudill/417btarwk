@@ -1,0 +1,15 @@
+
+public class Peer {
+
+	boolean am_choking;
+	boolean am_interested;
+	boolean peer_choking;
+	boolean peer_interested;
+	
+	byte pstrlen = new byte[1];
+	String pstr;
+	byte[] reserved;
+	byte[] info_hash;
+	byte[] peer_id;
+	
+}
