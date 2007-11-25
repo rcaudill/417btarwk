@@ -51,7 +51,6 @@ public class TorrentFileHandlerTester
 			System.out.println("File Size (Bytes): " + torrent_file.file_length);
 			System.out.println("Piece Size (Bytes): " + torrent_file.piece_length);
 			System.out.println("SHA-1 Info Hash: " + torrent_file.info_hash_as_url);
-			
 			for (int i = 0; i < torrent_file.piece_hash_values_as_hex.size(); i++) {
 				System.out.println("SHA-1 Hash for Piece [" + i + "]: " 
 						+ (String) torrent_file.piece_hash_values_as_url.elementAt(i));

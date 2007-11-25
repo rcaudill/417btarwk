@@ -9,6 +9,9 @@
  */
 
 import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 
 public class BitTortoise
@@ -31,16 +34,46 @@ public class BitTortoise
 		{
 			TorrentFileHandler torrentFileHandler = new TorrentFileHandler();
 			torrentFile = torrentFileHandler.openTorrentFile(args[0]);
-		}
-		catch(Exception e)
+			
+			// Using the parsed torrent file, ping the tracker and get a list of peers to connect to:
+			//port is hardcoded for now, but it can be an arg if we need it to be.
+			HttpURLConnection connection = (HttpURLConnection)(new URL(torrentFile.tracker_url+"?"+
+					"info_hash="+torrentFile.info_hash_as_url+"&"+
+					"downloaded=0"+"&"+
+					"uploaded=0"+"&"+
+					"left="+torrentFile.file_length+"&"+
+					"peer_id="+torrentFile.info_hash_as_url+"&"+
+					"port="+"6881").openConnection());
+			System.out.println(connection.getURL().toString());
+			connection.setRequestMethod("GET");
+			connection.connect();
+			
+			/*get's the reply from the tracker*/
+			InputStream in = connection.getInputStream();
+			byte[] buffer = new byte[1024];
+			int result = in.read(buffer);
+			
+			while (result != -1) {
+				System.out.write(buffer,0,result);
+				result =in.read(buffer);
+			}
+			
+			/*i did this in my example, i'm going to check if i need to keep these open. -andrew*/
+			//in.close();
+			//connection.disconnect();
+		}catch (UnknownHostException e)
+		{
+			System.err.println(e);
+		}catch (IOException e) 
+		{
+			System.err.println(e);
+		}catch(Exception e)
 		{
 			System.out.println("The provided file was not of the appropriate format, or could not be read.");
 			System.exit(1);
 		}
-		
-		// Using the parsed torrent file, ping the tracker and get a list of peers to connect to:
-		
-		//peerList = pingTracker(...)?;
+
+		//peerList = decode(trackerResponse).getPeers
 		ArrayList peers = new ArrayList();
 		//for each p in peerList {
 			//peers.add(new Peer(p.pstr, p.reserved, p.info_hash, p.peer_id));
