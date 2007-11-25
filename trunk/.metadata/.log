@@ -1,0 +1,62 @@
+!SESSION 2007-11-25 04:12:52.406 -----------------------------------------------
+eclipse.buildId=M20070212-1330
+java.version=1.6.0_03
+java.vendor=Sun Microsystems Inc.
+BootLoader constants: OS=linux, ARCH=x86, WS=gtk, NL=en_US
+Command-line arguments:  -os linux -ws gtk -arch x86
+
+!ENTRY org.eclipse.osgi 2 1 2007-11-25 04:13:05.106
+!MESSAGE NLS missing message: initializer_error in: org.eclipse.core.internal.runtime.messages
+
+!ENTRY org.eclipse.osgi 2 1 2007-11-25 04:13:05.113
+!MESSAGE NLS missing message: fileInitializer_fileNotFound in: org.eclipse.core.internal.runtime.messages
+
+!ENTRY org.eclipse.osgi 2 1 2007-11-25 04:13:05.114
+!MESSAGE NLS missing message: fileInitializer_IOError in: org.eclipse.core.internal.runtime.messages
+
+!ENTRY org.eclipse.osgi 2 1 2007-11-25 04:13:05.114
+!MESSAGE NLS missing message: fileInitializer_missingFileName in: org.eclipse.core.internal.runtime.messages
+
+!ENTRY org.eclipse.jdt.ui 4 10001 2007-11-25 05:04:11.164
+!MESSAGE Internal Error
+!STACK 1
+Java Model Exception: Java Model Status [add(E) [in ArrayList [in ArrayList.class [in java.util [in /usr/lib/jvm/java-6-sun-1.6.0.03/jre/lib/rt.jar]]]] does not exist]
+	at org.eclipse.jdt.internal.core.JavaElement.newNotPresentException(JavaElement.java:485)
+	at org.eclipse.jdt.internal.core.JavaElement.openWhenClosed(JavaElement.java:516)
+	at org.eclipse.jdt.internal.core.JavaElement.getElementInfo(JavaElement.java:249)
+	at org.eclipse.jdt.internal.core.JavaElement.getElementInfo(JavaElement.java:235)
+	at org.eclipse.jdt.internal.core.BinaryMethod.getSignature(BinaryMethod.java:401)
+	at org.eclipse.jdt.internal.ui.text.java.MethodProposalInfo.isSameMethodSignature(MethodProposalInfo.java:178)
+	at org.eclipse.jdt.internal.ui.text.java.MethodProposalInfo.findMethod(MethodProposalInfo.java:151)
+	at org.eclipse.jdt.internal.ui.text.java.MethodProposalInfo.findMethod(MethodProposalInfo.java:93)
+	at org.eclipse.jdt.internal.ui.text.java.MethodProposalInfo.resolveMember(MethodProposalInfo.java:71)
+	at org.eclipse.jdt.internal.ui.text.java.MemberProposalInfo.getJavaElement(MemberProposalInfo.java:56)
+	at org.eclipse.jdt.internal.ui.text.java.ProposalInfo.computeInfo(ProposalInfo.java:73)
+	at org.eclipse.jdt.internal.ui.text.java.ProposalInfo.getInfo(ProposalInfo.java:59)
+	at org.eclipse.jdt.internal.ui.text.java.AbstractJavaCompletionProposal.getAdditionalProposalInfo(AbstractJavaCompletionProposal.java:458)
+	at org.eclipse.jface.text.contentassist.AdditionalInfoController$Timer$2$1.run(AdditionalInfoController.java:102)
+	at org.eclipse.core.internal.jobs.Worker.run(Worker.java:58)
+!SUBENTRY 1 org.eclipse.jdt.core 4 969 2007-11-25 05:04:11.167
+!MESSAGE add(E) [in ArrayList [in ArrayList.class [in java.util [in /usr/lib/jvm/java-6-sun-1.6.0.03/jre/lib/rt.jar]]]] does not exist
+
+!ENTRY org.eclipse.jdt.ui 4 10001 2007-11-25 05:14:19.280
+!MESSAGE Internal Error
+!STACK 1
+Java Model Exception: Java Model Status [add(E) [in ArrayList [in ArrayList.class [in java.util [in /usr/lib/jvm/java-6-sun-1.6.0.03/jre/lib/rt.jar]]]] does not exist]
+	at org.eclipse.jdt.internal.core.JavaElement.newNotPresentException(JavaElement.java:485)
+	at org.eclipse.jdt.internal.core.JavaElement.openWhenClosed(JavaElement.java:516)
+	at org.eclipse.jdt.internal.core.JavaElement.getElementInfo(JavaElement.java:249)
+	at org.eclipse.jdt.internal.core.JavaElement.getElementInfo(JavaElement.java:235)
+	at org.eclipse.jdt.internal.core.BinaryMethod.getSignature(BinaryMethod.java:401)
+	at org.eclipse.jdt.internal.ui.text.java.MethodProposalInfo.isSameMethodSignature(MethodProposalInfo.java:178)
+	at org.eclipse.jdt.internal.ui.text.java.MethodProposalInfo.findMethod(MethodProposalInfo.java:151)
+	at org.eclipse.jdt.internal.ui.text.java.MethodProposalInfo.findMethod(MethodProposalInfo.java:93)
+	at org.eclipse.jdt.internal.ui.text.java.MethodProposalInfo.resolveMember(MethodProposalInfo.java:71)
+	at org.eclipse.jdt.internal.ui.text.java.MemberProposalInfo.getJavaElement(MemberProposalInfo.java:56)
+	at org.eclipse.jdt.internal.ui.text.java.ProposalInfo.computeInfo(ProposalInfo.java:73)
+	at org.eclipse.jdt.internal.ui.text.java.ProposalInfo.getInfo(ProposalInfo.java:59)
+	at org.eclipse.jdt.internal.ui.text.java.AbstractJavaCompletionProposal.getAdditionalProposalInfo(AbstractJavaCompletionProposal.java:458)
+	at org.eclipse.jface.text.contentassist.AdditionalInfoController$Timer$2$1.run(AdditionalInfoController.java:102)
+	at org.eclipse.core.internal.jobs.Worker.run(Worker.java:58)
+!SUBENTRY 1 org.eclipse.jdt.core 4 969 2007-11-25 05:14:19.280
+!MESSAGE add(E) [in ArrayList [in ArrayList.class [in java.util [in /usr/lib/jvm/java-6-sun-1.6.0.03/jre/lib/rt.jar]]]] does not exist

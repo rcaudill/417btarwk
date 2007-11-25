@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<session version="1.0">
+<refactoring comment="Rename type 'Peer' to 'PeerInterface'&#10;- Original element: 'Peer'&#10;- Renamed element: 'PeerInterface'&#10;- Update references to refactored element&#10;- Update textual occurrences in comments and strings" description="Rename type 'Peer'" flags="589830" id="org.eclipse.jdt.ui.rename.type" input="/417BitTorrentClient&lt;{Peer.java[Peer" matchStrategy="1" name="PeerInterface" qualified="false" references="true" similarDeclarations="false" stamp="1195967394235" textual="false" version="1.0"/>
+</session>
