@@ -602,9 +602,8 @@ public class TorrentFileHandler
 			// First check to see if we need ASCII or HEX
 			if ((in[i] >= '0' && in[i] <= '9')
 					|| (in[i] >= 'a' && in[i] <= 'z')
-					|| (in[i] >= 'A' && in[i] <= 'Z') || in[i] == '$'
-					|| in[i] == '-' || in[i] == '_' || in[i] == '.'
-					|| in[i] == '+' || in[i] == '!')
+					|| (in[i] >= 'A' && in[i] <= 'Z')
+					|| in[i] == '-' || in[i] == '_' || in[i] == '.')
 			{
 				out.append((char) in[i]);
 				i++;
