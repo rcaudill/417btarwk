@@ -110,7 +110,6 @@ final class Bencoder
 		if (bytes.length < 1)
 			return null;
 		
-System.out.println("" + new String(bytes));
 		return bdecode(bytes, 0);
 	}
 
