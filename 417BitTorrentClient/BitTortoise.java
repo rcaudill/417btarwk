@@ -22,15 +22,19 @@ import java.util.Map;
 public class BitTortoise
 {
 	/**
-	 * Usage: "java bittortoise <torrent_file> [<destination_file>]" 
+	 * Usage: "java bittortoise <torrent_file> [<destination_file> [port]]" 
 	 * 
 	 * @param args
 	 */
 	public static void main(String args[])
 	{
 		// Verify that the correct argument(s) were used:
-		if(args.length < 1 || args.length > 2)
-			System.out.println("Usage: java bittortoise <torrent_file> [<destination_file>]");
+		if(args.length < 1 || args.length > 3)
+			System.out.println("Usage: java bittortoise <torrent_file> [<destination_file> [port]]");
+		
+		int port = 6881;
+		if(args.length == 3)
+			port = Integer.parseInt(args[2]);
 		
 		// Parse the torrent file.
 		TorrentFile torrentFile = new TorrentFile();
@@ -46,29 +50,30 @@ public class BitTortoise
 			System.exit(1);
 		}
 		
-		// Extract a list of peers:
-		List<Peer> peerList = new LinkedList<Peer>();
+		// Extract a list of peers, and other information from the tracker:
+		List<Peer> peerList = new LinkedList<Peer>(); // List of peer objects (uses Generics)
+		int interval = 0; // seconds the client should wait before sending a regular request to the tracker
+		int min_interval = 0; // seconds the client must wait before sending a regular request to the tracker
+		String tracker_id = ""; // a string to send back on next announcements
+		int complete = 0; // number of seeders/peers with the entire file
+		int incomplete = 0; // number of leechers/peers providing 0+ parts of the file (but are not seeders)
 		try
 		{
 			// Using the parsed torrent file, ping the tracker and get a list of peers to connect to:
-			//port is hardcoded for now, but it can be an arg if we need it to be.
 			HttpURLConnection connection = (HttpURLConnection)(new URL(torrentFile.tracker_url+"?"+
 					"info_hash="+torrentFile.info_hash_as_url+"&"+
 					"downloaded=0"+"&"+
 					"uploaded=0"+"&"+
 					"left="+torrentFile.file_length+"&"+
 					"peer_id="+torrentFile.info_hash_as_url+"&"+
-					"port="+"6881").openConnection());
+					"port="+port).openConnection());
 			connection.setRequestMethod("GET");
 			connection.connect();
 			
-			/*get's the reply from the tracker*/
+			// get's the reply from the tracker
 			InputStream in = connection.getInputStream();
 			
-			/*response comes in the form
-			 * hashmap: different entries
-			 * peers: linked list of hashmaps*/
-			
+			// Decode the returned message, translate it into peer objects and such.
 			Object response = Bencoder.bdecode(in);
 			if(response instanceof Map)
 			{
@@ -121,6 +126,36 @@ public class BitTortoise
 						System.err.println("Tracker returned no peers.");
 						System.exit(1);
 					}
+					
+					if(responseMap.containsKey("interval"))
+					{
+						interval = (Integer)responseMap.get("interval");
+					}
+					
+					if(responseMap.containsKey("min interval"))
+					{
+						min_interval = (Integer)responseMap.get("min interval");
+					}
+					
+					if(responseMap.containsKey("tracker id"))
+					{
+						tracker_id = new String((byte[])responseMap.get("tracker id"));
+					}
+					
+					if(responseMap.containsKey("complete"))
+					{
+						complete = (Integer)responseMap.get("complete");
+					}
+					
+					if(responseMap.containsKey("incomplete"))
+					{
+						incomplete = (Integer)responseMap.get("incomplete");
+					}
+					
+					if(responseMap.containsKey("warning message"))
+					{
+						System.err.println("Warning: " + new String((byte[])responseMap.get("warning message")));
+					}
 				}
 			}
 			else
@@ -129,7 +164,7 @@ public class BitTortoise
 				System.exit(1);
 			}
 			
-			/*i did this in my example, i'm going to check if i need to keep these open. -andrew*/
+			// i did this in my example, i'm going to check if i need to keep these open. -andrew
 			//in.close();
 			//connection.disconnect();
 		}
