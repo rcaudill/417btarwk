@@ -14,7 +14,10 @@
  *
  * handshake: The handshake is a required message and must be the first message transmitted by the client. It is (49+len(pstr)) bytes long. handshake: <pstrlen><pstr><reserved><info_hash><peer_id> 
  */
-public class Peer {
+public class Peer 
+{
+	private final String pstr = "BitTorrent Protocol";
+	private final byte pstrlen = (byte)pstr.length();
 	
 	public boolean am_choking; //this client is choking the peer
 	public boolean am_interested; //this client is interested in the peer
@@ -26,15 +29,18 @@ public class Peer {
 	public String ip;
 	public int port;
 	
+	public byte[] my_peer_id = new byte[20];
+	
 	public String handshake; //handshake: <pstrlen><pstr><reserved><info_hash><peer_id>
 	
 	/**
 	 * @param info_hash 20-byte SHA1 hash of the info key in the metainfo file. This is the same info_hash that is transmitted in tracker requests.
-	 * @param peer_id 20-byte string used as a unique ID for the client. This is usually the same peer_id that is transmitted in tracker requests (but not always e.g. an anonymity option in Azureus).
+	 * @param peer_id 20-byte string that is being used by the other peer as their peer id.
+	 * @param my_peer_id 20-byte string used as a unique ID for this client. This is usually the same peer_id that is transmitted in tracker requests (but not always e.g. an anonymity option in Azureus).
 	 * @param ip IP address for the specific peer
 	 * @param port Port to use when contacting the specific peer
 	 */
-	public Peer(byte[] info_hash, byte[] peer_id, String ip, int port) {
+	public Peer(byte[] info_hash, byte[] peer_id, byte[] my_peer_id, String ip, int port) {
 		// Client connections start out as "choked" and "not interested"
 		this.am_choking = true;
 		this.am_interested = false;
@@ -45,6 +51,7 @@ public class Peer {
 
 			this.info_hash = info_hash;
 			this.peer_id = peer_id;
+			this.my_peer_id = my_peer_id;
 			this.ip = ip;
 			this.port = port;
 			
@@ -55,7 +62,29 @@ public class Peer {
 		
 		try {
 			//handshake: <pstrlen><pstr><reserved><info_hash><peer_id>
-			this.handshake = ""; //new String(pstrlen + pstr + reserved + info_hash + peer_id);
+			byte[] tempHandshake = new byte[1+pstrlen+8+20+20];
+			
+			// Add <pstrlen> portion:
+			tempHandshake[0] = pstrlen;
+			
+			// Add <pstr> portion:
+			byte[] pstrBytes = pstr.getBytes();
+			for(int i = 0; i < pstrlen; i++)
+				tempHandshake[1 + i] = pstrBytes[i];
+			
+			// Add <reserved> portion:
+			for(int i = 0; i < 8; i++)
+				tempHandshake[1 + pstrlen + i] = 0;
+			
+			// Add <info_hash> portion:
+			for(int i = 0; i < 20; i++)
+				tempHandshake[9 + pstrlen + i] = this.info_hash[i];
+			
+			// Add <peer_id> portion:
+			for(int i = 0; i < 20; i++)
+				tempHandshake[29 + pstrlen + i] = this.peer_id[i];
+			
+			this.handshake = new String(tempHandshake);
 		} catch( Exception e) {
 			System.out.println("Failed to create peer handshake.");
 			System.exit(1);

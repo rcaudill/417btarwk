@@ -586,7 +586,7 @@ public class TorrentFileHandler
 	/*
 	 * Stolen from byteArrayToByteString
 	 */
-	private static String byteArrayToURLString(byte in[])
+	public static String byteArrayToURLString(byte in[])
 	{
 		byte ch = 0x00;
 		int i = 0;

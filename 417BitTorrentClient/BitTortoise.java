@@ -18,6 +18,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.Map;
+import java.util.Random;
 
 public class BitTortoise
 {
@@ -28,16 +29,31 @@ public class BitTortoise
 	 */
 	public static void main(String args[])
 	{
+		int port; // the port we are listening on
+		TorrentFile torrentFile; // the object into which the .torrent file is b-decoded
+		List<Peer> peerList; // list of Peer objects that we got from the tracker
+		int interval; // seconds the client should wait before sending a regular request to the tracker
+		int min_interval; // seconds the client must wait before sending a regular request to the tracker
+		String tracker_id; // a string to send back on next announcements
+		int complete; // number of seeders/peers with the entire file
+		int incomplete; // number of leechers/peers providing 0+ parts of the file (but are not seeders)
+		RandomAccessFile destinationFile; // The file into which we are writing
+		byte[] my_peer_id = new byte[20]; // the peer id that this client is using
+		
+		// Generate a peer_id:
+		Random randomGenerator = new Random();
+		randomGenerator.nextBytes(my_peer_id);
+		
 		// Verify that the correct argument(s) were used:
 		if(args.length < 1 || args.length > 3)
 			System.out.println("Usage: java bittortoise <torrent_file> [<destination_file> [port]]");
 		
-		int port = 6881;
+		port = 6881;
 		if(args.length == 3)
 			port = Integer.parseInt(args[2]);
 		
 		// Parse the torrent file.
-		TorrentFile torrentFile = new TorrentFile();
+		torrentFile = new TorrentFile();
 		// Note: this was put in a try block because this sometimes breaks when reading a bad torrent file
 		try
 		{
@@ -51,22 +67,22 @@ public class BitTortoise
 		}
 		
 		// Extract a list of peers, and other information from the tracker:
-		List<Peer> peerList = new LinkedList<Peer>(); // List of peer objects (uses Generics)
-		int interval = 0; // seconds the client should wait before sending a regular request to the tracker
-		int min_interval = 0; // seconds the client must wait before sending a regular request to the tracker
-		String tracker_id = ""; // a string to send back on next announcements
-		int complete = 0; // number of seeders/peers with the entire file
-		int incomplete = 0; // number of leechers/peers providing 0+ parts of the file (but are not seeders)
+		peerList = new LinkedList<Peer>(); // List of peer objects (uses Generics)
+		interval = 0; // seconds the client should wait before sending a regular request to the tracker
+		min_interval = 0; // seconds the client must wait before sending a regular request to the tracker
+		tracker_id = ""; // a string to send back on next announcements
+		complete = 0; // number of seeders/peers with the entire file
+		incomplete = 0; // number of leechers/peers providing 0+ parts of the file (but are not seeders)
 		try
 		{
 			// Using the parsed torrent file, ping the tracker and get a list of peers to connect to:
-			HttpURLConnection connection = (HttpURLConnection)(new URL(torrentFile.tracker_url+"?"+
-					"info_hash="+torrentFile.info_hash_as_url+"&"+
-					"downloaded=0"+"&"+
-					"uploaded=0"+"&"+
-					"left="+torrentFile.file_length+"&"+
-					"peer_id="+torrentFile.info_hash_as_url+"&"+
-					"port="+port).openConnection());
+			HttpURLConnection connection = (HttpURLConnection)(new URL(torrentFile.tracker_url + "?" +
+					"info_hash=" + torrentFile.info_hash_as_url + "&" +
+					"downloaded=0" + "&" +
+					"uploaded=0" + "&" +
+					"left=" + torrentFile.file_length + "&" +
+					"peer_id=" + TorrentFileHandler.byteArrayToURLString(my_peer_id) + "&" +
+					"port=" + port).openConnection());
 			connection.setRequestMethod("GET");
 			connection.connect();
 			
@@ -102,7 +118,7 @@ public class BitTortoise
 									
 									if(peerInformation.containsKey("peer id") && peerInformation.containsKey("port") && peerInformation.containsKey("ip"))
 									{
-										peerList.add(new Peer(torrentFile.info_hash_as_binary, (byte[])peerInformation.get("peer id"), new String((byte[])(peerInformation.get("ip"))), (Integer)peerInformation.get("port")));
+										peerList.add(new Peer(torrentFile.info_hash_as_binary, (byte[])peerInformation.get("peer id"), my_peer_id, new String((byte[])(peerInformation.get("ip"))), (Integer)peerInformation.get("port")));
 									}
 									else
 									{
@@ -177,6 +193,30 @@ public class BitTortoise
 			System.err.println(e);
 		}
 		
+		// Create the destination file:
+		try
+		{
+			if(args.length > 1)
+			{
+				// If we were given a file name, use it:
+				destinationFile = new RandomAccessFile(args[1],"rw");
+			}
+			else
+			{
+				// If we were not given a file name, use the string preceding ".torrent" in the torrent file:
+				// Ex. "testTorrentFile.txt.torrent" -> "testTorrentFile.txt"
+				destinationFile = new RandomAccessFile(args[0].substring(0,args[0].lastIndexOf(".torrent")), "rw");
+			}
+			// Set the file to the total length of the file:
+			destinationFile.setLength(torrentFile.file_length);
+		}
+		catch(IOException e)
+		{
+			System.err.println("Error creating file: " + e.getMessage());
+			System.exit(1);
+		}
+		/*
+		// Code Sample for writing to a certain area of a file:
 		try
 		{
 			RandomAccessFile raf = new RandomAccessFile("tempTestFile.txt","rw");
@@ -191,7 +231,9 @@ public class BitTortoise
 		{
 			System.out.println("error occurred.");
 		}
+		*/
 		
 		// Start the main loop of the client - choose and connect to peers, accept connections from peers, attempt to get all of the file
+		System.out.println("Success!");
 	}
 }
