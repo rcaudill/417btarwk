@@ -47,45 +47,27 @@ public class Peer
 		this.peer_choking = true;
 		this.peer_interested = false;
 
-		try {
-
+		try
+		{
 			this.info_hash = info_hash;
 			this.peer_id = peer_id;
 			this.my_peer_id = my_peer_id;
 			this.ip = ip;
 			this.port = port;
-			
-		} catch(Exception e) {
+		}
+		catch(Exception e)
+		{
 			System.out.println("Failed to initialze peer. Check for variable size overflow");
 			System.exit(1);
 		}
 		
-		try {
+		try
+		{
 			//handshake: <pstrlen><pstr><reserved><info_hash><peer_id>
-			byte[] tempHandshake = new byte[1+pstrlen+8+20+20];
-			
-			// Add <pstrlen> portion:
-			tempHandshake[0] = pstrlen;
-			
-			// Add <pstr> portion:
-			byte[] pstrBytes = pstr.getBytes();
-			for(int i = 0; i < pstrlen; i++)
-				tempHandshake[1 + i] = pstrBytes[i];
-			
-			// Add <reserved> portion:
-			for(int i = 0; i < 8; i++)
-				tempHandshake[1 + pstrlen + i] = 0;
-			
-			// Add <info_hash> portion:
-			for(int i = 0; i < 20; i++)
-				tempHandshake[9 + pstrlen + i] = this.info_hash[i];
-			
-			// Add <peer_id> portion:
-			for(int i = 0; i < 20; i++)
-				tempHandshake[29 + pstrlen + i] = this.peer_id[i];
-			
-			this.handshake = new String(tempHandshake);
-		} catch( Exception e) {
+			this.handshake = Byte.toString(pstrlen) + pstr + new String(this.info_hash) + new String(this.peer_id);
+		}
+		catch(Exception e)
+		{
 			System.out.println("Failed to create peer handshake.");
 			System.exit(1);
 		}
