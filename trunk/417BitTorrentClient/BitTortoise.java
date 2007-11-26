@@ -13,6 +13,9 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.Set;
 
 public class BitTortoise
 {
@@ -49,8 +52,29 @@ public class BitTortoise
 			
 			/*get's the reply from the tracker*/
 			InputStream in = connection.getInputStream();
-			Object response = Bencoder.bdecode(in);
 			
+			/*response comes in the form
+			 * hashmap: different entries
+			 * peers: linked list of hashmaps*/
+			
+			HashMap response = (HashMap)Bencoder.bdecode(in);
+			LinkedList peerList = (LinkedList)response.get("peers");
+			HashMap[] peerMap = new HashMap[peerList.size()];
+			
+			for(int i=0;i<peerList.size();i++){
+				peerMap[i] = (HashMap)peerList.get(i);
+			}
+			
+			/*create new peer objects from response
+			 * decode some values*/
+			
+			/*peer keys: id, port, ip
+			 * get byte[]s back*/
+			byte[] daPeerId = (byte[])peerMap[0].get("peer id");
+			byte[] daIp = (byte[])peerMap[0].get("ip");
+			//the peerId doesn't translate well, maybe someone else knows why...
+			System.out.println(new String(daPeerId));
+			System.out.println(new String(daIp));
 			/*i did this in my example, i'm going to check if i need to keep these open. -andrew*/
 			//in.close();
 			//connection.disconnect();

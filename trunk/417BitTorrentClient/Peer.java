@@ -26,6 +26,7 @@ public class Peer {
 	public byte[] reserved = new byte[8]; //eight (8) reserved bytes.
 	public byte[] info_hash = new byte[20]; //20-byte SHA1 hash of the info key in the metainfo file
 	public byte[] peer_id = new byte[20]; //20-byte string used as a unique ID for the client
+	public String ip;
 	
 	public String handshake; //handshake: <pstrlen><pstr><reserved><info_hash><peer_id>
 	
@@ -35,7 +36,7 @@ public class Peer {
 	 * @param info_hash 20-byte SHA1 hash of the info key in the metainfo file. This is the same info_hash that is transmitted in tracker requests.
 	 * @param peer_id 20-byte string used as a unique ID for the client. This is usually the same peer_id that is transmitted in tracker requests (but not always e.g. an anonymity option in Azureus).
 	 */
-	public Peer(String pstr, String reserved, String info_hash, String peer_id) {
+	public Peer(String pstr, String reserved, String info_hash, String peer_id, String ip) {
 		// Client connections start out as "choked" and "not interested"
 		this.am_choking = true;
 		this.am_interested = false;
@@ -49,6 +50,7 @@ public class Peer {
 			this.reserved = reserved.getBytes();
 			this.info_hash = info_hash.getBytes();
 			this.peer_id = peer_id.getBytes();
+			this.ip = ip;
 		} catch(Exception e) {
 			System.out.println("Failed to initialze peer. Check for variable size overflow");
 			System.exit(1);
