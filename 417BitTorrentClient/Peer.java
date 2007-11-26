@@ -23,7 +23,7 @@ public class Peer {
 	
 	public byte[] info_hash = new byte[20]; //20-byte SHA1 hash of the info key in the metainfo file
 	public byte[] peer_id = new byte[20]; //20-byte string used as a unique ID for the client
-	public byte[] ip;
+	public String ip;
 	public int port;
 	
 	public String handshake; //handshake: <pstrlen><pstr><reserved><info_hash><peer_id>
@@ -34,7 +34,7 @@ public class Peer {
 	 * @param ip IP address for the specific peer
 	 * @param port Port to use when contacting the specific peer
 	 */
-	public Peer(byte[] info_hash, byte[] peer_id, byte[] ip, int port) {
+	public Peer(byte[] info_hash, byte[] peer_id, String ip, int port) {
 		// Client connections start out as "choked" and "not interested"
 		this.am_choking = true;
 		this.am_interested = false;
