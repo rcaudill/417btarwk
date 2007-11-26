@@ -15,7 +15,9 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Set;
+import java.util.Map;
 
 public class BitTortoise
 {
@@ -31,13 +33,21 @@ public class BitTortoise
 			System.out.println("Usage: java bittortoise <torrent_file> [<destination_file>]");
 		
 		// Parse the torrent file.
-		TorrentFile torrentFile;
+		TorrentFile torrentFile = new TorrentFile();
 		// Note: this was put in a try block because this sometimes breaks when reading a bad torrent file
 		try
 		{
 			TorrentFileHandler torrentFileHandler = new TorrentFileHandler();
 			torrentFile = torrentFileHandler.openTorrentFile(args[0]);
-			
+		}
+		catch(Exception e)
+		{
+			System.out.println("The provided file was not of the appropriate format, or could not be read.");
+			System.exit(1);
+		}
+		
+		try
+		{
 			// Using the parsed torrent file, ping the tracker and get a list of peers to connect to:
 			//port is hardcoded for now, but it can be an arg if we need it to be.
 			HttpURLConnection connection = (HttpURLConnection)(new URL(torrentFile.tracker_url+"?"+
@@ -57,39 +67,80 @@ public class BitTortoise
 			 * hashmap: different entries
 			 * peers: linked list of hashmaps*/
 			
-			HashMap response = (HashMap)Bencoder.bdecode(in);
-			LinkedList peerList = (LinkedList)response.get("peers");
-			HashMap[] peerMap = new HashMap[peerList.size()];
-			
-			for(int i=0;i<peerList.size();i++){
-				peerMap[i] = (HashMap)peerList.get(i);
+			Object response = Bencoder.bdecode(in);
+			List<Peer> peerList = new LinkedList<Peer>();
+			if(response instanceof Map)
+			{
+				Map responseMap = (Map)response;
+				
+				if(responseMap.containsKey("failure reason"))
+				{
+					System.err.println("A failure occurred at the tracker - " + responseMap.get("failure reason"));
+					System.exit(1);
+				}
+				else
+				{
+					if(responseMap.containsKey("peers"))
+					{
+						Object p = responseMap.get("peers");
+						
+						if(p instanceof List)
+						{
+							List peers = (List)p;
+							
+							for(Object o : peers)
+							{
+								if(o instanceof Map)
+								{
+									Map peerInformation = (Map)o;
+									
+									if(peerInformation.containsKey("peer id") && peerInformation.containsKey("port") && peerInformation.containsKey("ip"))
+									{
+										peerList.add(new Peer(torrentFile.info_hash_as_binary, (String)peerInformation.get("peer id"), (String)peerInformation.get("ip"), (Integer)peerInformation.get("port")));
+									}
+									else
+									{
+										System.err.println("Bad peer response.  Skipping...");
+									}
+								}
+								else
+								{
+									System.err.println("Bad peer response.  Skipping...");
+								}
+							}
+						}
+						else
+						{
+							System.err.println("Tracker returned no peers.");
+							System.exit(1);
+						}
+					}
+					else
+					{
+						System.err.println("Tracker returned no peers.");
+						System.exit(1);
+					}
+				}
+			}
+			else
+			{
+				System.err.println("Tracker returned an unexpected type.");
+				System.exit(1);
 			}
 			
-			/*create new peer objects from response
-			 * decode some values*/
-			
-			/*peer keys: id, port, ip
-			 * get byte[]s back*/
-			byte[] daPeerId = (byte[])peerMap[0].get("peer id");
-			byte[] daIp = (byte[])peerMap[0].get("ip");
-			//the peerId doesn't translate well, maybe someone else knows why...
-			System.out.println(new String(daPeerId));
-			System.out.println(new String(daIp));
 			/*i did this in my example, i'm going to check if i need to keep these open. -andrew*/
 			//in.close();
 			//connection.disconnect();
-		}catch (UnknownHostException e)
-		{
-			System.err.println(e);
-		}catch (IOException e) 
-		{
-			System.err.println(e);
-		}catch(Exception e)
-		{
-			System.out.println("The provided file was not of the appropriate format, or could not be read.");
-			System.exit(1);
 		}
-
+		catch (UnknownHostException e)
+		{
+			System.err.println(e);
+		}
+		catch (IOException e) 
+		{
+			System.err.println(e);
+		}
+		
 		//peerList = decode(trackerResponse).getPeers
 		ArrayList peers = new ArrayList();
 		//for each p in peerList {
