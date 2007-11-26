@@ -46,6 +46,8 @@ public class BitTortoise
 			System.exit(1);
 		}
 		
+		// Extract a list of peers:
+		List<Peer> peerList = new LinkedList<Peer>();
 		try
 		{
 			// Using the parsed torrent file, ping the tracker and get a list of peers to connect to:
@@ -68,7 +70,6 @@ public class BitTortoise
 			 * peers: linked list of hashmaps*/
 			
 			Object response = Bencoder.bdecode(in);
-			List<Peer> peerList = new LinkedList<Peer>();
 			if(response instanceof Map)
 			{
 				Map responseMap = (Map)response;
@@ -96,7 +97,7 @@ public class BitTortoise
 									
 									if(peerInformation.containsKey("peer id") && peerInformation.containsKey("port") && peerInformation.containsKey("ip"))
 									{
-										peerList.add(new Peer(torrentFile.info_hash_as_binary, (String)peerInformation.get("peer id"), (String)peerInformation.get("ip"), (Integer)peerInformation.get("port")));
+										peerList.add(new Peer(torrentFile.info_hash_as_binary, (byte[])peerInformation.get("peer id"), (byte[])peerInformation.get("ip"), (Integer)peerInformation.get("port")));
 									}
 									else
 									{
@@ -140,12 +141,6 @@ public class BitTortoise
 		{
 			System.err.println(e);
 		}
-		
-		//peerList = decode(trackerResponse).getPeers
-		ArrayList peers = new ArrayList();
-		//for each p in peerList {
-			//peers.add(new Peer(p.pstr, p.reserved, p.info_hash, p.peer_id));
-		//}
 		
 		try
 		{
