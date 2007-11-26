@@ -90,7 +90,7 @@ final class Bencoder
 			if (amt == 0)
 				Thread.yield();
 			else
-				baos.write(response);
+				baos.write(response, 0, amt);
 		}
 
 		return bdecode(baos.toByteArray());
@@ -109,6 +109,8 @@ final class Bencoder
 	{
 		if (bytes.length < 1)
 			return null;
+		
+System.out.println("" + new String(bytes));
 		return bdecode(bytes, 0);
 	}
 
