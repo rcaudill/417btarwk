@@ -46,8 +46,10 @@ public class BitTortoise
 		
 		// Verify that the correct argument(s) were used:
 		if(args.length < 1 || args.length > 3)
-			System.out.println("Usage: java bittortoise <torrent_file> [<destination_file> [port]]");
-		
+		{
+			System.err.println("Usage: java bittortoise <torrent_file> [<destination_file> [port]]");
+			System.exit(1);
+		}
 		port = 6881;
 		if(args.length == 3)
 			port = Integer.parseInt(args[2]);
@@ -97,7 +99,7 @@ public class BitTortoise
 				
 				if(responseMap.containsKey("failure reason"))
 				{
-					System.err.println("A failure occurred at the tracker - " + responseMap.get("failure reason"));
+					System.err.println("Tracker reported the following failure: " + responseMap.get("failure reason"));
 					System.exit(1);
 				}
 				else
@@ -122,12 +124,12 @@ public class BitTortoise
 									}
 									else
 									{
-										System.err.println("Bad peer response.  Skipping...");
+										System.err.println("Tracker gave a bad peer response.  Skipping...");
 									}
 								}
 								else
 								{
-									System.err.println("Bad peer response.  Skipping...");
+									System.err.println("Tracker gave a bad peer response.  Skipping...");
 								}
 							}
 						}
@@ -170,7 +172,7 @@ public class BitTortoise
 					
 					if(responseMap.containsKey("warning message"))
 					{
-						System.err.println("Warning: " + new String((byte[])responseMap.get("warning message")));
+						System.err.println("Tracker Warning: " + new String((byte[])responseMap.get("warning message")));
 					}
 				}
 			}
@@ -186,11 +188,11 @@ public class BitTortoise
 		}
 		catch (UnknownHostException e)
 		{
-			System.err.println(e);
+			System.err.println("Tracker is an unknown host: " + e.getMessage());
 		}
 		catch (IOException e) 
 		{
-			System.err.println(e);
+			System.err.println("Error connecting to or reading from Tracker: " + e.getMessage());
 		}
 		
 		// Create the destination file:
@@ -199,7 +201,7 @@ public class BitTortoise
 			if(args.length > 1)
 			{
 				// If we were given a file name, use it:
-				destinationFile = new RandomAccessFile(args[1],"rw");
+				destinationFile = new RandomAccessFile(args[1], "rw");
 			}
 			else
 			{
