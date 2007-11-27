@@ -65,7 +65,7 @@ public class Peer
 		{
 			//handshake: <pstrlen><pstr><reserved><info_hash><peer_id>
 			this.handshake = Byte.toString(pstrlen) + pstr + new String(new byte[] {0,0,0,0,0,0,0,0}) + new String(this.info_hash) + new String(this.peer_id);
-			System.out.println("Handshake is " + handshake);
+			//System.out.println("Handshake is " + handshake);
 		}
 		catch(Exception e)
 		{
@@ -75,6 +75,14 @@ public class Peer
 	}
 	
 	public String toString() {
-		return "(" + info_hash + ", " + peer_id + ", " + ip + ", " + port + ")";
+		return "( INFO_HASH:" + getBytesAsHex(info_hash) + ", PEER_ID:" + getBytesAsHex(peer_id) + ", " + ip + ", PORT:" + port + ")\n";
+	}
+	
+	private String getBytesAsHex(byte[] bytes) {
+		String output = new String();
+		for ( byte b : bytes ) {
+			output += Integer.toHexString( b & 0xff ) + " " ;
+		}
+		return output;
 	}
 }
