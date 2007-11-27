@@ -26,11 +26,13 @@ public class Peer
 	public boolean peer_choking; //peer is choking this client
 	public boolean peer_interested; //peer is interested in this client
 	
+	public boolean handshake_sent; // this client sent a handshake to the peer
+	public boolean handshake_received; // this client received a handshake from the peer
+	
 	public byte[] info_hash = new byte[20]; //20-byte SHA1 hash of the info key in the metainfo file
 	public byte[] peer_id = new byte[20]; //20-byte string used as a unique ID for the client
 	public String ip;
 	public int port;
-	public ByteBuffer byteBuffer = ByteBuffer.allocate(49 + pstr.length());
 	
 	
 	public byte[] my_peer_id = new byte[20];
@@ -51,6 +53,8 @@ public class Peer
 		this.am_interested = false;
 		this.peer_choking = true;
 		this.peer_interested = false;
+		this.handshake_received = false;
+		this.handshake_sent = false;
 		
 		try
 		{
@@ -69,6 +73,7 @@ public class Peer
 		try
 		{
 			//handshake: <pstrlen><pstr><reserved><info_hash><peer_id>
+			ByteBuffer byteBuffer = ByteBuffer.allocate(49 + pstr.length());
 			byteBuffer.put(pstrlen);
 			byteBuffer.put(pstr.getBytes());
 			byteBuffer.put(new byte[] {0,0,0,0,0,0,0,0});
@@ -96,5 +101,16 @@ public class Peer
 			output += Integer.toHexString( b & 0xff ) + " " ;
 		}
 		return output;
+	}
+	
+	public boolean equals(Object o)
+	{
+		if(o instanceof Peer)
+		{
+			Peer other = (Peer)o;
+			
+			return (other.ip.equals(this.ip) && other.port == this.port && ByteBuffer.wrap(other.peer_id).equals(ByteBuffer.wrap(this.peer_id)) && ByteBuffer.wrap(other.info_hash).equals(ByteBuffer.wrap(this.info_hash)));
+		}
+		return false;
 	}
 }
