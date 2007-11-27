@@ -40,7 +40,7 @@ public class BitTortoise
 		byte[] my_peer_id = new byte[20]; // the peer id that this client is using
 		
 		// State variables:
-		List<Boolean> completedPieces; // Whether the Pieces/blocks of the file are completed or not 
+		BitSet completedPieces; // Whether the Pieces/blocks of the file are completed or not 
 		int totalPieceCount = 0;
 		
 		// Generate a peer_id:
@@ -72,9 +72,7 @@ public class BitTortoise
 		}
 		
 		totalPieceCount = ((int)torrentFile.file_length/torrentFile.piece_length) + 1;
-		completedPieces = new ArrayList<Boolean>(totalPieceCount);
-		for(int i = 0; i < totalPieceCount; i++)
-			completedPieces.add(new Boolean(false));
+		completedPieces = new BitSet(totalPieceCount);
 		
 		// Extract a list of peers, and other information from the tracker:
 		peerList = new LinkedList<Peer>(); // List of peer objects (uses Generics)
@@ -300,5 +298,26 @@ public class BitTortoise
 		}
 		
 		System.out.println("Success!");
+	}
+	
+	/**
+	 * Create a byte array from a bit set: used for the bitfield message in the BitTorrent Protocol 
+	 * 
+	 * @param bs BitSet from which we want to create a byte array
+	 * @param numBits The number of bits that we are dealing with
+	 */
+	public static byte[] byteArrayFromBitSet(BitSet bs, int numBits)
+	{
+		byte[] bytes = new byte[(numBits / 8) + ((numBits % 8 == 0)? 0 : 1)];
+		
+		for(int i = 0; i < numBits; i ++)
+		{
+			if(bs.get(i))
+			{
+				bytes[i/8] |= (byte)((1 << (7 - i % 8)));
+			}
+		}
+		
+		return bytes;
 	}
 }
