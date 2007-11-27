@@ -64,7 +64,7 @@ public class Peer
 		try
 		{
 			//handshake: <pstrlen><pstr><reserved><info_hash><peer_id>
-			this.handshake = Byte.toString(pstrlen) + pstr + new String(this.info_hash) + new String(this.peer_id);
+			this.handshake = Byte.toString(pstrlen) + pstr + new String(new byte[] {0,0,0,0,0,0,0,0}) + new String(this.info_hash) + new String(this.peer_id);
 		}
 		catch(Exception e)
 		{
