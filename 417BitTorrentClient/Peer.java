@@ -65,11 +65,16 @@ public class Peer
 		{
 			//handshake: <pstrlen><pstr><reserved><info_hash><peer_id>
 			this.handshake = Byte.toString(pstrlen) + pstr + new String(new byte[] {0,0,0,0,0,0,0,0}) + new String(this.info_hash) + new String(this.peer_id);
+			System.out.println("Handshake is " + handshake);
 		}
 		catch(Exception e)
 		{
 			System.out.println("Failed to create peer handshake.");
 			System.exit(1);
 		}
+	}
+	
+	public String toString() {
+		return "(" + info_hash + ", " + peer_id + ", " + ip + ", " + port + ")";
 	}
 }
