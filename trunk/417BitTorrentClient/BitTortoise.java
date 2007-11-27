@@ -42,7 +42,7 @@ public class BitTortoise
 		// State variables:
 		BitSet completedPieces; // Whether the Pieces/blocks of the file are completed or not 
 		int totalPieceCount = 0;
-		Map<SocketChannel, Peer> peerMap;
+		Map<SocketChannel, Peer> peerMap = new TreeMap<SocketChannel, Peer>();
 		
 		// Generate a peer_id:
 		Random randomGenerator = new Random();
@@ -318,7 +318,18 @@ public class BitTortoise
 							else if(isHandshakeMessage(b))
 							{
 								// Handshake Message Received:
-								byte[] external_peer_id;
+								byte[] external_info_hash = new byte[20];
+								byte[] external_peer_id = new byte[20];
+								
+								b.position(28);
+								b.get(external_info_hash, 0, 20);
+								
+								b.position(48);
+								b.get(external_peer_id, 0, 20);
+								
+								// if the info hashes are equal...
+								
+								peerMap.put(sc, new Peer())
 							}
 							else if(size > 4)
 							{
@@ -394,8 +405,6 @@ public class BitTortoise
 		System.out.println("Success!");
 	}
 	
-	
-	
 	/**
 	 * Create a byte array from a bit set: used for the bitfield message in the BitTorrent Protocol 
 	 * 
@@ -449,6 +458,4 @@ public class BitTortoise
 		
 		return true;
 	}
-	
-
 }
