@@ -42,6 +42,7 @@ public class BitTortoise
 		// State variables:
 		BitSet completedPieces; // Whether the Pieces/blocks of the file are completed or not 
 		int totalPieceCount = 0;
+		Map<SocketChannel, Peer> peerMap;
 		
 		// Generate a peer_id:
 		Random randomGenerator = new Random();
@@ -279,7 +280,76 @@ public class BitTortoise
 						else if(key.isReadable())
 						{
 							// read, process inputs
+							ByteBuffer b = ByteBuffer.allocate(1024);
+							SocketChannel sc = (SocketChannel)key.channel();
+							int size = sc.read(b);
 							
+							// Get the peer object associated with the connection, if any:
+							Peer peer;
+							
+							if(size == 4)
+							{
+								// Keep alive Message Received:
+							}
+							else if(isHandshakeMessage(b))
+							{
+								// Handshake Message Received:
+								byte[] external_peer_id;
+							}
+							else if(size > 4)
+							{
+								int length = b.getInt(0); 
+								
+								byte id = b.array()[4];
+								if(id == 0)
+								{
+									// Choke Message Received:
+								}
+								else if(id == 1)
+								{
+									// Un-choke Message Received:
+								}
+								else if(id == 2)
+								{
+									// Interested Message Received:
+								}
+								else if(id == 3)
+								{
+									// Not Interested Message Received:
+								}
+								else if(id == 4)
+								{
+									// Have Message Received:
+								}
+								else if(id == 5)
+								{
+									// Bitfield Message Received:
+								}
+								else if(id == 6)
+								{
+									// Request Message Received:
+								}
+								else if(id == 7)
+								{
+									// Piece Message Received:
+								}
+								else if(id == 8)
+								{
+									// Cancel Message Received:
+								}
+								else if(id == 9)
+								{
+									// Port Message Received:
+								}
+								else
+								{
+									// Unrecognized id
+								}
+							}
+							else
+							{
+								// Message too small - ignore?
+							}
 						}
 						else if(key.isWritable())
 						{
@@ -319,5 +389,38 @@ public class BitTortoise
 		}
 		
 		return bytes;
+	}
+	
+	/**
+	 * Create a byte array from a bit set: used for the bitfield message in the BitTorrent Protocol 
+	 * 
+	 * @param buf the buffer that we are checking against
+	 */
+	public static boolean isHandshakeMessage(ByteBuffer buf)
+	{
+		// 49 + pstrlen (19) = 68
+		if(buf.remaining() < 68)
+		{
+			buf.position(0);
+			return false;
+		}
+		if(buf.getChar() != (char)19)
+		{
+			buf.position(0);
+			return false;
+		}
+		
+		byte[] bytes = new byte[19];
+		buf.get(bytes, 1, 19);
+		
+		if(!(("BitTorrent protocol").equalsIgnoreCase(new String(bytes))))
+		{
+			buf.position(0);
+			return false;
+		}
+		
+		buf.position(0);
+		
+		return true;
 	}
 }
