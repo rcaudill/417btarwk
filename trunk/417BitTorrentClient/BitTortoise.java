@@ -224,6 +224,28 @@ public class BitTortoise
 			System.err.println("Error creating file: " + e.getMessage());
 			System.exit(1);
 		}
+		
+		byte[] buffer = new byte[1000];
+		ByteBuffer byteBuffer = ByteBuffer.allocate(1000);
+		
+		for (int i=0; i < peerList.size(); i++) {
+			//System.out.println(peerList.get(i));
+			Peer peer = peerList.get(i);
+			Socket socket;
+			try 
+			{ 
+				socket = new Socket(peer.ip, peer.port); 
+				socket.getOutputStream().write(peer.handshake);
+				System.out.println("Successful connect to " + peer.ip + ":" + peer.port);
+				int numRead = socket.getChannel().read(byteBuffer);
+				System.out.println("received " + numRead + " bytes: " +  Peer.getBytesAsHex(buffer));
+			} catch (Exception e) {
+				System.out.println("Couldn't connect to " + peer.ip + ":" + peer.port);
+				e.printStackTrace();
+			}
+
+		}
+		
 		/*
 		// Code Sample for writing to a certain area of a file:
 		try
@@ -243,6 +265,7 @@ public class BitTortoise
 		*/
 		
 		// Start the main loop of the client - choose and connect to peers, accept connections from peers, attempt to get all of the file
+		/*
 		try
 		{
 			// Create the selector:
@@ -257,6 +280,7 @@ public class BitTortoise
 			
 			// Register this server channel within the selector:
 			serverChannel.register(select, SelectionKey.OP_ACCEPT);
+			
 			
 			// Main Data processing loop:
 			while(true)
@@ -366,9 +390,11 @@ public class BitTortoise
 			System.err.println("Error Occurred!");
 			System.exit(1);
 		}
-		
+		*/
 		System.out.println("Success!");
 	}
+	
+	
 	
 	/**
 	 * Create a byte array from a bit set: used for the bitfield message in the BitTorrent Protocol 
@@ -423,4 +449,6 @@ public class BitTortoise
 		
 		return true;
 	}
+	
+
 }

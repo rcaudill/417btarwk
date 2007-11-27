@@ -1,3 +1,5 @@
+import java.nio.ByteBuffer;
+
 
 /**
  * 
@@ -16,8 +18,8 @@
  */
 public class Peer 
 {
-	private final String pstr = "BitTorrent Protocol";
-	private final byte pstrlen = (byte)pstr.length();
+	private final String pstr = "BitTorrent protocol";
+	private final byte pstrlen = (byte)(pstr.length());
 	
 	public boolean am_choking; //this client is choking the peer
 	public boolean am_interested; //this client is interested in the peer
@@ -28,10 +30,13 @@ public class Peer
 	public byte[] peer_id = new byte[20]; //20-byte string used as a unique ID for the client
 	public String ip;
 	public int port;
+	public ByteBuffer byteBuffer = ByteBuffer.allocate(49 + pstr.length());
+	
 	
 	public byte[] my_peer_id = new byte[20];
 	
-	public String handshake; //handshake: <pstrlen><pstr><reserved><info_hash><peer_id>
+	
+	public byte[] handshake = new byte[49 + pstrlen]; //handshake: <pstrlen><pstr><reserved><info_hash><peer_id>
 	
 	/**
 	 * @param info_hash 20-byte SHA1 hash of the info key in the metainfo file. This is the same info_hash that is transmitted in tracker requests.
@@ -46,7 +51,7 @@ public class Peer
 		this.am_interested = false;
 		this.peer_choking = true;
 		this.peer_interested = false;
-
+		
 		try
 		{
 			this.info_hash = info_hash;
@@ -64,8 +69,15 @@ public class Peer
 		try
 		{
 			//handshake: <pstrlen><pstr><reserved><info_hash><peer_id>
-			this.handshake = Byte.toString(pstrlen) + pstr + new String(new byte[] {0,0,0,0,0,0,0,0}) + new String(this.info_hash) + new String(this.peer_id);
-			//System.out.println("Handshake is " + handshake);
+			byteBuffer.put(pstrlen);
+			byteBuffer.put(pstr.getBytes());
+			byteBuffer.put(new byte[] {0,0,0,0,0,0,0,0});
+			byteBuffer.put(this.info_hash);
+			byteBuffer.put(this.peer_id);
+			handshake = byteBuffer.array();
+			
+			//System.out.println("IP is" + ip);
+			//System.out.println("Handshake is " + Peer.getBytesAsHex(handshake));
 		}
 		catch(Exception e)
 		{
@@ -75,10 +87,10 @@ public class Peer
 	}
 	
 	public String toString() {
-		return "( INFO_HASH:" + getBytesAsHex(info_hash) + ", PEER_ID:" + getBytesAsHex(peer_id) + ", " + ip + ", PORT:" + port + ")\n";
+		return "( INFO_HASH:" + getBytesAsHex(info_hash) + ", PEER_ID:" + getBytesAsHex(peer_id) + ", " + ip + ":" + port + ")\n";
 	}
 	
-	private String getBytesAsHex(byte[] bytes) {
+	public static String getBytesAsHex(byte[] bytes) {
 		String output = new String();
 		for ( byte b : bytes ) {
 			output += Integer.toHexString( b & 0xff ) + " " ;
