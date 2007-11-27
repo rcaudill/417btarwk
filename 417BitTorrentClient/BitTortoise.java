@@ -42,7 +42,7 @@ public class BitTortoise
 		// State variables:
 		BitSet completedPieces; // Whether the Pieces/blocks of the file are completed or not 
 		int totalPieceCount = 0;
-		Map<SocketChannel, Peer> peerMap = new TreeMap<SocketChannel, Peer>();
+		Map<SocketChannel, Peer> peerMap = new HashMap<SocketChannel, Peer>();
 		
 		// Generate a peer_id:
 		Random randomGenerator = new Random();
@@ -284,144 +284,161 @@ public class BitTortoise
 			// Main Data processing loop:
 			while(true)
 			{
-				int num = select.selectNow(); // equivalent: int num = select.select(0);
+				int num = select.select(0); // equivalent: int num = select.select(0);
 				
 				if(num > 0)
 				{
+				
 					for(SelectionKey key : select.selectedKeys())
 					{
-						if(key.isAcceptable())
+						try
 						{
-							// Incoming Connection to the server channel/socket:
-							// Accept the connection, set it to not block:
-							SocketChannel newConnection = serverChannel.accept();
-							newConnection.configureBlocking(false);
-							
-							// Register the connection with the selector
-							newConnection.register(select, SelectionKey.OP_READ & SelectionKey.OP_WRITE);
-						}
-						else if(key.isReadable())
-						{
-							// read, process inputs
-							ByteBuffer b = ByteBuffer.allocate(1024);
-							SocketChannel sc = (SocketChannel)key.channel();
-							int size = sc.read(b);
-							
-							// Get the peer object associated with the connection, if any:
-							Peer peer;
-							
-							if(size == 4)
+							if(key.isAcceptable())
 							{
-								// Keep alive Message Received:
+								// Incoming Connection to the server channel/socket:
+								// Accept the connection, set it to not block:
+								SocketChannel newConnection = serverChannel.accept();
+								newConnection.configureBlocking(false);
+								
+								// Register the connection with the selector
+								newConnection.register(select, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
 							}
-							else if(size >= 68 && isHandshakeMessage(b))
+							else if(key.isReadable())
 							{
-								// Handshake Message Received:
-								byte[] external_info_hash = new byte[20];
-								byte[] external_peer_id = new byte[20];
+								// read, process inputs
+								ByteBuffer b = ByteBuffer.allocate(1024);
+								SocketChannel sc = (SocketChannel)key.channel();
+								int size = sc.read(b);
 								
-								b.position(28);
-								b.get(external_info_hash, 0, 20);
+								System.out.println(new String(b.array()));
 								
-								b.position(48);
-								b.get(external_peer_id, 0, 20);
+								// Get the peer object associated with the connection, if any:
+								Peer peer;
 								
-								// Check if the info hash that was given matches the one we are providing (by wrapping in a ByteBuffer, using .equals)
-								if(!ByteBuffer.wrap(external_info_hash).equals(ByteBuffer.wrap(torrentFile.info_hash_as_binary)))
+								if(size == 4)
 								{
-									// Peer requested connection for a bad info hash - Throw out connection ?
+									// Keep alive Message Received:
 								}
-								else
+								else if(isHandshakeMessage(b))
 								{
-									Peer connectedTo;
-									if(peerMap.containsKey(sc))
+									
+									// Handshake Message Received:
+									byte[] external_info_hash = new byte[20];
+									byte[] external_peer_id = new byte[20];
+									
+									b.position(28);
+									b.get(external_info_hash, 0, 20);
+									
+									b.position(48);
+									b.get(external_peer_id, 0, 20);
+									
+									// Check if the info hash that was given matches the one we are providing (by wrapping in a ByteBuffer, using .equals)
+									if(!ByteBuffer.wrap(external_info_hash).equals(ByteBuffer.wrap(torrentFile.info_hash_as_binary)))
 									{
-										connectedTo = peerMap.get(sc);
+										// Peer requested connection for a bad info hash - Throw out connection ?
 									}
 									else
 									{
-										connectedTo = new Peer(torrentFile.info_hash_as_binary, external_peer_id, my_peer_id, sc.socket().getInetAddress().getHostAddress(), sc.socket().getPort());
-										
-										if(!peerMap.containsValue(connectedTo))
+										Peer connectedTo;
+										if(peerMap.containsKey(sc))
 										{
-											peerMap.put(sc, connectedTo);
+											connectedTo = peerMap.get(sc);
 										}
 										else
 										{
-											// We have already added this connection to the map - ignore ?
+											connectedTo = new Peer(torrentFile.info_hash_as_binary, external_peer_id, my_peer_id, sc.socket().getInetAddress().getHostAddress(), sc.socket().getPort());
+											
+											if(!peerMap.containsValue(connectedTo))
+											{
+												peerMap.put(sc, connectedTo);
+											}
+											else
+											{
+												// We have already added this connection to the map - ignore ?
+											}
 										}
+										connectedTo.handshake_received = true;
 									}
-									connectedTo.handshake_received = true;
 								}
-							}
-							else if(size > 4)
-							{
-								int length = b.getInt(0); 
-								
-								byte id = b.array()[4];
-								if(id == 0)
+								else if(size > 4)
 								{
-									// Choke Message Received:
-								}
-								else if(id == 1)
-								{
-									// Un-choke Message Received:
-								}
-								else if(id == 2)
-								{
-									// Interested Message Received:
-								}
-								else if(id == 3)
-								{
-									// Not Interested Message Received:
-								}
-								else if(id == 4)
-								{
-									// Have Message Received:
-								}
-								else if(id == 5)
-								{
-									// Bitfield Message Received:
-								}
-								else if(id == 6)
-								{
-									// Request Message Received:
-								}
-								else if(id == 7)
-								{
-									// Piece Message Received:
-								}
-								else if(id == 8)
-								{
-									// Cancel Message Received:
-								}
-								else if(id == 9)
-								{
-									// Port Message Received:
+									int length = b.getInt(0); 
+									
+									byte id = b.array()[4];
+									if(id == 0)
+									{
+										// Choke Message Received:
+									}
+									else if(id == 1)
+									{
+										// Un-choke Message Received:
+									}
+									else if(id == 2)
+									{
+										// Interested Message Received:
+									}
+									else if(id == 3)
+									{
+										// Not Interested Message Received:
+									}
+									else if(id == 4)
+									{
+										// Have Message Received:
+									}
+									else if(id == 5)
+									{
+										// Bitfield Message Received:
+									}
+									else if(id == 6)
+									{
+										// Request Message Received:
+									}
+									else if(id == 7)
+									{
+										// Piece Message Received:
+									}
+									else if(id == 8)
+									{
+										// Cancel Message Received:
+									}
+									else if(id == 9)
+									{
+										// Port Message Received:
+									}
+									else
+									{
+										// Unrecognized id
+									}
 								}
 								else
 								{
-									// Unrecognized id
+									// Message too small - ignore?
 								}
 							}
-							else
+							else if(key.isWritable())
 							{
-								// Message too small - ignore?
+								System.out.println("writable");
+								// if this is a peer we are writing to, that's 
 							}
+							else
+								System.out.println("other");
 						}
-						else if(key.isWritable())
+						catch(IOException e)
 						{
-							// if this is a peer we are writing to, that's 
+							System.err.println("IO error - " + e.getMessage());
 						}
 					}
 				}
+				
+				// This may be needed for some reason:
+				select.selectedKeys().clear();
 				
 				// Check the number of connections, add more if needed
 			}
 		}
 		catch(Exception e)
 		{
-			System.err.println("Error Occurred!");
+			System.err.println("Error Occurred!" + e.getMessage());
 			System.exit(1);
 		}
 		*/
@@ -456,23 +473,32 @@ public class BitTortoise
 	 */
 	public static boolean isHandshakeMessage(ByteBuffer buf)
 	{
-		if(buf.getChar() != (char)19)
+		buf.position(0);
+		byte b = buf.get();
+		System.out.println("" + b + ((int)b));
+		if(b != (byte)19)
 		{
 			buf.position(0);
 			return false;
 		}
 		
-		byte[] bytes = new byte[19];
-		buf.get(bytes, 1, 19);
-		
-		if(!(("BitTorrent protocol").equalsIgnoreCase(new String(bytes))))
+		buf.position(1);
+		if(buf.remaining() > 19)
 		{
-			buf.position(0);
-			return false;
+			byte[] bytes = new byte[19];
+			buf.get(bytes, 0, 19);
+			
+			String test = new String("BitTorrent protocol");
+			String bytesString = new String(bytes);
+			
+			if(!test.equalsIgnoreCase(bytesString))
+			{
+				buf.position(0);
+				return false;
+			}
 		}
 		
 		buf.position(0);
-		
 		return true;
 	}
 }
