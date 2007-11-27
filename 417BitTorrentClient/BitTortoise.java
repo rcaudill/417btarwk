@@ -224,7 +224,7 @@ public class BitTortoise
 			System.err.println("Error creating file: " + e.getMessage());
 			System.exit(1);
 		}
-		
+		/*
 		byte[] buffer = new byte[1000];
 		ByteBuffer byteBuffer = ByteBuffer.allocate(1000);
 		
@@ -244,7 +244,7 @@ public class BitTortoise
 				e.printStackTrace();
 			}
 
-		}
+		}*/
 		
 		/*
 		// Code Sample for writing to a certain area of a file:
@@ -281,7 +281,6 @@ public class BitTortoise
 			// Register this server channel within the selector:
 			serverChannel.register(select, SelectionKey.OP_ACCEPT);
 			
-			
 			// Main Data processing loop:
 			while(true)
 			{
@@ -315,7 +314,7 @@ public class BitTortoise
 							{
 								// Keep alive Message Received:
 							}
-							else if(isHandshakeMessage(b))
+							else if(size >= 68 && isHandshakeMessage(b))
 							{
 								// Handshake Message Received:
 								byte[] external_info_hash = new byte[20];
@@ -327,9 +326,33 @@ public class BitTortoise
 								b.position(48);
 								b.get(external_peer_id, 0, 20);
 								
-								// if the info hashes are equal...
-								
-								peerMap.put(sc, new Peer())
+								// Check if the info hash that was given matches the one we are providing (by wrapping in a ByteBuffer, using .equals)
+								if(!ByteBuffer.wrap(external_info_hash).equals(ByteBuffer.wrap(torrentFile.info_hash_as_binary)))
+								{
+									// Peer requested connection for a bad info hash - Throw out connection ?
+								}
+								else
+								{
+									Peer connectedTo;
+									if(peerMap.containsKey(sc))
+									{
+										connectedTo = peerMap.get(sc);
+									}
+									else
+									{
+										connectedTo = new Peer(torrentFile.info_hash_as_binary, external_peer_id, my_peer_id, sc.socket().getInetAddress().getHostAddress(), sc.socket().getPort());
+										
+										if(!peerMap.containsValue(connectedTo))
+										{
+											peerMap.put(sc, connectedTo);
+										}
+										else
+										{
+											// We have already added this connection to the map - ignore ?
+										}
+									}
+									connectedTo.handshake_received = true;
+								}
 							}
 							else if(size > 4)
 							{
@@ -433,12 +456,6 @@ public class BitTortoise
 	 */
 	public static boolean isHandshakeMessage(ByteBuffer buf)
 	{
-		// 49 + pstrlen (19) = 68
-		if(buf.remaining() < 68)
-		{
-			buf.position(0);
-			return false;
-		}
 		if(buf.getChar() != (char)19)
 		{
 			buf.position(0);
