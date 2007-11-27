@@ -6,19 +6,17 @@
  * 
  * @author Robert Caudill, Kenny Leftin, Andrew Nichols, William Rall
  *
+ * References used:
+ * 1. Select-like Multiplexing in Java:
+ *		http://www.javaworld.com/javaworld/jw-04-2003/jw-0411-select.html     
+ * 
  */
 
 import java.io.*;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.net.UnknownHostException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Set;
-import java.util.Map;
-import java.util.Random;
+import java.net.*;
+import java.util.*;
+import java.nio.*;
+import java.nio.channels.*;
 
 public class BitTortoise
 {
@@ -29,6 +27,7 @@ public class BitTortoise
 	 */
 	public static void main(String args[])
 	{
+		// Torrent file, tracker, argument, and other parsed variables:
 		int port; // the port we are listening on
 		TorrentFile torrentFile; // the object into which the .torrent file is b-decoded
 		List<Peer> peerList; // list of Peer objects that we got from the tracker
@@ -40,6 +39,10 @@ public class BitTortoise
 		RandomAccessFile destinationFile; // The file into which we are writing
 		byte[] my_peer_id = new byte[20]; // the peer id that this client is using
 		
+		// State variables:
+		List<Boolean> completedPieces; // Whether the Pieces/blocks of the file are completed or not 
+		int totalPieceCount = 0;
+		
 		// Generate a peer_id:
 		Random randomGenerator = new Random();
 		randomGenerator.nextBytes(my_peer_id);
@@ -50,7 +53,7 @@ public class BitTortoise
 			System.err.println("Usage: java bittortoise <torrent_file> [<destination_file> [port]]");
 			System.exit(1);
 		}
-		port = 6881;
+		port = 6881; // default port is 6881
 		if(args.length == 3)
 			port = Integer.parseInt(args[2]);
 		
@@ -67,6 +70,11 @@ public class BitTortoise
 			System.out.println("The provided file was not of the appropriate format, or could not be read.");
 			System.exit(1);
 		}
+		
+		totalPieceCount = ((int)torrentFile.file_length/torrentFile.piece_length) + 1;
+		completedPieces = new ArrayList<Boolean>(totalPieceCount);
+		for(int i = 0; i < totalPieceCount; i++)
+			completedPieces.add(new Boolean(false));
 		
 		// Extract a list of peers, and other information from the tracker:
 		peerList = new LinkedList<Peer>(); // List of peer objects (uses Generics)
@@ -236,6 +244,61 @@ public class BitTortoise
 		*/
 		
 		// Start the main loop of the client - choose and connect to peers, accept connections from peers, attempt to get all of the file
+		try
+		{
+			// Create the selector:
+			Selector select = Selector.open();
+			
+			// Create the server channel, set it to non-blocking mode
+			ServerSocketChannel serverChannel = ServerSocketChannel.open();
+			serverChannel.configureBlocking(false);
+			
+			// Bind the socket represented by the server channel to a port:
+			serverChannel.socket().bind(new InetSocketAddress(port));
+			
+			// Register this server channel within the selector:
+			serverChannel.register(select, SelectionKey.OP_ACCEPT);
+			
+			// Main Data processing loop:
+			while(true)
+			{
+				int num = select.selectNow(); // equivalent: int num = select.select(0);
+				
+				if(num > 0)
+				{
+					for(SelectionKey key : select.selectedKeys())
+					{
+						if(key.isAcceptable())
+						{
+							// Incoming Connection to the server channel/socket:
+							// Accept the connection, set it to not block:
+							SocketChannel newConnection = serverChannel.accept();
+							newConnection.configureBlocking(false);
+							
+							// Register the connection with the selector
+							newConnection.register(select, SelectionKey.OP_READ & SelectionKey.OP_WRITE);
+						}
+						else if(key.isReadable())
+						{
+							// read, process inputs
+							
+						}
+						else if(key.isWritable())
+						{
+							// if this is a peer we are writing to, that's 
+						}
+					}
+				}
+				
+				// Check the number of connections, add more if needed
+			}
+		}
+		catch(Exception e)
+		{
+			System.err.println("Error Occurred!");
+			System.exit(1);
+		}
+		
 		System.out.println("Success!");
 	}
 }
