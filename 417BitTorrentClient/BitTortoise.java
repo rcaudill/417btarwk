@@ -280,7 +280,7 @@ public class BitTortoise
 		*/
 		
 		// Start the main loop of the client - choose and connect to peers, accept connections from peers, attempt to get all of the file
-		
+		/*
 		try
 		{
 			// Create the selector:
@@ -357,23 +357,15 @@ public class BitTortoise
 										}
 										else
 										{
-											Peer connectedTo;
-											if(peerMap.containsKey(sc))
+											Peer connectedTo = new Peer(torrentFile.info_hash_as_binary, external_peer_id, my_peer_id, sc.socket().getInetAddress().getHostAddress(), sc.socket().getPort());
+											
+											if(!peerMap.containsValue(connectedTo))
 											{
-												connectedTo = peerMap.get(sc);
+												peerMap.put(sc, connectedTo);
 											}
 											else
 											{
-												connectedTo = new Peer(torrentFile.info_hash_as_binary, external_peer_id, my_peer_id, sc.socket().getInetAddress().getHostAddress(), sc.socket().getPort());
-												
-												if(!peerMap.containsValue(connectedTo))
-												{
-													peerMap.put(sc, connectedTo);
-												}
-												else
-												{
-													// We have already added this connection to the map - ignore ?
-												}
+												// We have already added this connection to the map - ignore ?
 											}
 											connectedTo.handshake_received = true;
 											
@@ -416,7 +408,7 @@ public class BitTortoise
 			System.err.println("Error Occurred!" + e.getMessage());
 			System.exit(1);
 		}
-		
+		*/
 		System.out.println("Success!");
 	}
 	

@@ -1,6 +1,7 @@
 import java.nio.ByteBuffer;
 
-public class MessageLibrary {
+public class MessageLibrary
+{
 
 	public final byte[] keep_alive = 		new byte[]{0,0,0,0};
 	public final byte[] choke = 			new byte[]{0,0,0,1,0};
