@@ -280,7 +280,7 @@ public class BitTortoise
 		*/
 		
 		// Start the main loop of the client - choose and connect to peers, accept connections from peers, attempt to get all of the file
-		/*
+		
 		try
 		{
 			// Create the selector:
@@ -416,7 +416,7 @@ public class BitTortoise
 			System.err.println("Error Occurred!" + e.getMessage());
 			System.exit(1);
 		}
-		*/
+		
 		System.out.println("Success!");
 	}
 	
@@ -442,10 +442,9 @@ public class BitTortoise
 	}
 	
 	/**
-	 * Create a byte array from a bit set: used for the bitfield message in the BitTorrent Protocol 
+	 * Create a BitSet from a byte array: used for handling the bitfield message in the BitTorrent Protocol 
 	 * 
-	 * @param bs BitSet from which we want to create a byte array
-	 * @param numBits The number of bits that we are dealing with
+	 * @param ba byte array from which we want to create a BitSet
 	 */
 	public static BitSet bitSetFromByteArray(byte[] ba)
 	{
@@ -471,7 +470,7 @@ public class BitTortoise
 	}
 	
 	/**
-	 * Create a byte array from a bit set: used for the bitfield message in the BitTorrent Protocol 
+	 * Create a byte array from a bit set: used for making the bitfield message in the BitTorrent Protocol 
 	 * 
 	 * @param buf the buffer that we are checking against
 	 */
