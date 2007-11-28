@@ -224,7 +224,7 @@ public class BitTortoise
 			System.err.println("Error creating file: " + e.getMessage());
 			System.exit(1);
 		}
-		
+		/*
 		byte[] buffer = new byte[1000];
 		ByteBuffer byteBuffer = ByteBuffer.allocate(1000);
 		//new Peer(torrentFile.info_hash_as_binary, (byte[])peerInformation.get("peer id"), my_peer_id, new String((byte[])(peerInformation.get("ip"))), (Integer)peerInformation.get("port")))
@@ -242,6 +242,7 @@ public class BitTortoise
 		}catch(Exception e){
 			System.err.println(e);
 		}
+		*/
 		/*for (int i=0; i < peerList.size(); i++) {
 			//System.out.println(peerList.get(i));
 			Peer peer = peerList.get(i);
@@ -319,114 +320,74 @@ public class BitTortoise
 							}
 							else if(key.isReadable())
 							{
-								// read, process inputs
-								ByteBuffer b = ByteBuffer.allocate(1024);
 								SocketChannel sc = (SocketChannel)key.channel();
-								int size = sc.read(b);
-								
-								System.out.println(new String(b.array()));
-								
-								// Get the peer object associated with the connection, if any:
-								Peer peer;
-								
-								if(size == 4)
+								// read, process inputs
+								// Check if this SocketChannel is already mapping to a peer - if not, we can only accept a handshake from it - if so, we are cool
+								int size = -1;
+								if(peerMap.containsKey(sc))
 								{
-									// Keep alive Message Received:
-								}
-								else if(isHandshakeMessage(b))
-								{
-									
-									// Handshake Message Received:
-									byte[] external_info_hash = new byte[20];
-									byte[] external_peer_id = new byte[20];
-									
-									b.position(28);
-									b.get(external_info_hash, 0, 20);
-									
-									b.position(48);
-									b.get(external_peer_id, 0, 20);
-									
-									// Check if the info hash that was given matches the one we are providing (by wrapping in a ByteBuffer, using .equals)
-									if(!ByteBuffer.wrap(external_info_hash).equals(ByteBuffer.wrap(torrentFile.info_hash_as_binary)))
-									{
-										// Peer requested connection for a bad info hash - Throw out connection ?
-									}
-									else
-									{
-										Peer connectedTo;
-										if(peerMap.containsKey(sc))
-										{
-											connectedTo = peerMap.get(sc);
-										}
-										else
-										{
-											connectedTo = new Peer(torrentFile.info_hash_as_binary, external_peer_id, my_peer_id, sc.socket().getInetAddress().getHostAddress(), sc.socket().getPort());
-											
-											if(!peerMap.containsValue(connectedTo))
-											{
-												peerMap.put(sc, connectedTo);
-											}
-											else
-											{
-												// We have already added this connection to the map - ignore ?
-											}
-										}
-										connectedTo.handshake_received = true;
-									}
-								}
-								else if(size > 4)
-								{
-									int length = b.getInt(0); 
-									
-									byte id = b.array()[4];
-									if(id == 0)
-									{
-										// Choke Message Received:
-									}
-									else if(id == 1)
-									{
-										// Un-choke Message Received:
-									}
-									else if(id == 2)
-									{
-										// Interested Message Received:
-									}
-									else if(id == 3)
-									{
-										// Not Interested Message Received:
-									}
-									else if(id == 4)
-									{
-										// Have Message Received:
-									}
-									else if(id == 5)
-									{
-										// Bitfield Message Received:
-									}
-									else if(id == 6)
-									{
-										// Request Message Received:
-									}
-									else if(id == 7)
-									{
-										// Piece Message Received:
-									}
-									else if(id == 8)
-									{
-										// Cancel Message Received:
-									}
-									else if(id == 9)
-									{
-										// Port Message Received:
-									}
-									else
-									{
-										// Unrecognized id
-									}
+									peerMap.get(sc).readAndParse(sc, true);
 								}
 								else
 								{
-									// Message too small - ignore?
+									ByteBuffer buf = ByteBuffer.allocate(1024);
+									size = sc.read(buf);
+									
+									if(size > 67 && isHandshakeMessage(buf))
+									{
+										// Handshake Message Received:
+										byte[] external_info_hash = new byte[20];
+										byte[] external_peer_id = new byte[20];
+										
+										buf.position(28);
+										buf.get(external_info_hash, 0, 20);
+										
+										buf.position(48);
+										buf.get(external_peer_id, 0, 20);
+										
+										buf.position(68);
+										buf.compact();
+										buf.position(0);
+										size -= 68;
+										
+										// Check if the info hash that was given matches the one we are providing (by wrapping in a ByteBuffer, using .equals)
+										if(!ByteBuffer.wrap(external_info_hash).equals(ByteBuffer.wrap(torrentFile.info_hash_as_binary)))
+										{
+											// Peer requested connection for a bad info hash - Throw out connection ?
+										}
+										else
+										{
+											Peer connectedTo;
+											if(peerMap.containsKey(sc))
+											{
+												connectedTo = peerMap.get(sc);
+											}
+											else
+											{
+												connectedTo = new Peer(torrentFile.info_hash_as_binary, external_peer_id, my_peer_id, sc.socket().getInetAddress().getHostAddress(), sc.socket().getPort());
+												
+												if(!peerMap.containsValue(connectedTo))
+												{
+													peerMap.put(sc, connectedTo);
+												}
+												else
+												{
+													// We have already added this connection to the map - ignore ?
+												}
+											}
+											connectedTo.handshake_received = true;
+											
+											connectedTo.bytesLeft = size;
+											connectedTo.readBuffer = buf;
+										}
+									}
+									else
+									{
+										// ignore messages that are sent before a handshake, or short handshakes...
+									}
+									
+									if(size != 0)
+										peerMap.get(sc).readAndParse(sc, false);
 								}
 							}
 							else if(key.isWritable())
@@ -478,6 +439,35 @@ public class BitTortoise
 		}
 		
 		return bytes;
+	}
+	
+	/**
+	 * Create a byte array from a bit set: used for the bitfield message in the BitTorrent Protocol 
+	 * 
+	 * @param bs BitSet from which we want to create a byte array
+	 * @param numBits The number of bits that we are dealing with
+	 */
+	public static BitSet bitSetFromByteArray(byte[] ba)
+	{
+		BitSet a = new BitSet(ba.length * 8);
+		
+		for(int i = 0; i < ba.length; i ++)
+		{
+			if(ba[i] != 0)
+			{
+				int temp = i*8;
+				a.set(temp, (ba[i] & 0x80) == 0x80);
+				a.set(temp + 1, (ba[i] & 0x40) == 0x40);
+				a.set(temp + 2, (ba[i] & 0x20) == 0x20);
+				a.set(temp + 3, (ba[i] & 0x10) == 0x10);
+				a.set(temp + 4, (ba[i] & 0x08) == 0x08);
+				a.set(temp + 5, (ba[i] & 0x04) == 0x04);
+				a.set(temp + 6, (ba[i] & 0x02) == 0x02);
+				a.set(temp + 7, (ba[i] & 0x01) == 0x01);
+			}
+		}
+		
+		return a;
 	}
 	
 	/**
