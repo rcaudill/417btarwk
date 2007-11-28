@@ -303,7 +303,6 @@ public class BitTortoise
 				
 				if(num > 0)
 				{
-				
 					for(SelectionKey key : select.selectedKeys())
 					{
 						try

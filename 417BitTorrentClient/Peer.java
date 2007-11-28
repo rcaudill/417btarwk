@@ -146,6 +146,39 @@ public class Peer
 				return false;
 			}
 		}
+		if(!this.handshake_received )
+		{
+			if(this.bytesLeft >= 68 && BitTortoise.isHandshakeMessage(readBuffer))
+			{
+				// Handshake Message Received:
+				byte[] external_info_hash = new byte[20];
+				byte[] external_peer_id = new byte[20];
+				
+				this.readBuffer.position(28);
+				this.readBuffer.get(external_info_hash, 0, 20);
+				
+				this.readBuffer.position(48);
+				this.readBuffer.get(external_peer_id, 0, 20);
+				
+				this.readBuffer.position(68);
+				this.readBuffer.compact();
+				this.readBuffer.position(0);
+				this.bytesLeft -= 68;
+				
+				// Check if the info hash that was given matches the one we are providing (by wrapping in a ByteBuffer, using .equals)
+				if(!ByteBuffer.wrap(external_info_hash).equals(ByteBuffer.wrap(this.info_hash)))
+				{
+					// Peer requested connection for a bad info hash - Throw out connection ?
+					return false;
+				}
+				
+				this.handshake_received = true;
+			}
+			else
+			{
+				return false;
+			}
+		}
 		while(this.bytesLeft >= 4 && cont)
 		{
 			// Attempt to read (may be a partial message)
