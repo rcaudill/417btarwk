@@ -45,8 +45,16 @@ public class BitTortoise
 		Map<SocketChannel, Peer> peerMap = new HashMap<SocketChannel, Peer>();
 		
 		// Generate a peer_id:
-		Random randomGenerator = new Random();
-		randomGenerator.nextBytes(my_peer_id);
+		my_peer_id[0] = (byte)'-'; // Replace the beginning of the id with "-BT0001-" to mimic normal naming schemes 
+		my_peer_id[1] = (byte)'B';
+		my_peer_id[2] = (byte)'T';
+		my_peer_id[3] = (byte)'0';
+		my_peer_id[4] = (byte)'0';
+		my_peer_id[5] = (byte)'0';
+		my_peer_id[6] = (byte)'1';
+		my_peer_id[7] = (byte)'-';
+		for(int i = 8; i < my_peer_id.length; i ++)
+			my_peer_id[i] = (byte)((Math.random() * 0x5F) + 0x20); // make sure these are printable characters (range from 0x20 to 0x7E)
 		
 		// Verify that the correct argument(s) were used:
 		if(args.length < 1 || args.length > 3)
@@ -469,7 +477,6 @@ public class BitTortoise
 	{
 		buf.position(0);
 		byte b = buf.get();
-		System.out.println("" + b + ((int)b));
 		if(b != (byte)19)
 		{
 			buf.position(0);

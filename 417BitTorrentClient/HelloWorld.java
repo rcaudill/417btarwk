@@ -35,7 +35,7 @@ public class HelloWorld {
 		
 		System.out.println("" + (byte)b.get(0) + "       hello -" + b.array()[0] + " " + ByteBuffer.wrap(external_info_hash).equals(ByteBuffer.wrap(new byte[]{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,14,13,12,11,1})));
 		*/
-		
+		/*
 		ByteBuffer have = ByteBuffer.allocate(17);
 		have.put(new byte[]{0,0,0,13,6});
 		have.putInt(4);
@@ -46,6 +46,19 @@ public class HelloWorld {
 		for(byte b : h)
 			result += (b + ", ");
 		System.out.println(result.substring(0, result.lastIndexOf(", ")));
+		*/
+		byte[] my_peer_id = new byte[20];
+		my_peer_id[0] = (byte)'-';// Replace the beginning of the id with "-BT0001-" to mimic normal naming schemes 
+		my_peer_id[1] = (byte)'B'; 
+		my_peer_id[2] = (byte)'T'; 
+		my_peer_id[3] = (byte)'0'; 
+		my_peer_id[4] = (byte)'0'; 
+		my_peer_id[5] = (byte)'0'; 
+		my_peer_id[6] = (byte)'1'; 
+		my_peer_id[7] = (byte)'-';
+		for(int i = 8; i < my_peer_id.length; i ++)
+			my_peer_id[i] = (byte)((Math.random() * 0x5F) + 0x20);
 		
+		System.out.println(new String(my_peer_id));
 	}
 }
