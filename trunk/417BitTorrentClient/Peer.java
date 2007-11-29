@@ -378,6 +378,18 @@ public class Peer
 				else
 				{
 					// Unrecognized id, ignore the rest of length bytes
+					if(this.bytesLeft < 17)
+					{
+						cont = false;
+					}
+					else
+					{
+						readBuffer.position(length + 4);
+						readBuffer.compact();
+						readBuffer.position(0);
+						
+						this.bytesLeft -= (length + 4);
+					}
 				}
 			}
 		}
