@@ -232,26 +232,12 @@ public class BitTortoise
 			System.err.println("Error creating file: " + e.getMessage());
 			System.exit(1);
 		}
-		/*
+		
 		byte[] buffer = new byte[1000];
 		ByteBuffer byteBuffer = ByteBuffer.allocate(1000);
+		
 		//new Peer(torrentFile.info_hash_as_binary, (byte[])peerInformation.get("peer id"), my_peer_id, new String((byte[])(peerInformation.get("ip"))), (Integer)peerInformation.get("port")))
-		Peer myself = new Peer(torrentFile.info_hash_as_binary,
-				"2D5554313735302DFA9165EF090899500CA1F21F".getBytes(),
-				my_peer_id,
-				new String("10.105.64.224"),
-				3799);
-		Socket socket;
-		try{
-			socket = new Socket(myself.ip,myself.port);
-			socket.getOutputStream().write(myself.handshake);
-			int numRead = socket.getChannel().read(byteBuffer);
-			System.out.println("recieved " + numRead + " bytes: " + Peer.getBytesAsHex(buffer));
-		}catch(Exception e){
-			System.err.println(e);
-		}
-		*/
-		/*for (int i=0; i < peerList.size(); i++) {
+		for (int i=0; i < peerList.size(); i++) {
 			//System.out.println(peerList.get(i));
 			Peer peer = peerList.get(i);
 			Socket socket;
@@ -260,14 +246,14 @@ public class BitTortoise
 				socket = new Socket(peer.ip, peer.port); 
 				socket.getOutputStream().write(peer.handshake);
 				System.out.println("Successful connect to " + peer.ip + ":" + peer.port);
-				int numRead = socket.getChannel().read(byteBuffer);
+				int numRead = socket.getInputStream().read(buffer);
 				System.out.println("received " + numRead + " bytes: " +  Peer.getBytesAsHex(buffer));
 			} catch (Exception e) {
 				System.out.println("Couldn't connect to " + peer.ip + ":" + peer.port);
 				e.printStackTrace();
 			}
 
-		}*/
+		}
 		
 		/*
 		// Code Sample for writing to a certain area of a file:
@@ -288,7 +274,7 @@ public class BitTortoise
 		*/
 		
 		// Start the main loop of the client - choose and connect to peers, accept connections from peers, attempt to get all of the file
-		/*
+		
 		try
 		{
 			// Create the selector:
@@ -415,7 +401,6 @@ public class BitTortoise
 			System.err.println("Error Occurred!" + e.getMessage());
 			System.exit(1);
 		}
-		*/
 		System.out.println("Success!");
 	}
 	
