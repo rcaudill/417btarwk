@@ -9,18 +9,19 @@ public class Message {
 	 * @param numRead - the number of bytes read
 	 */
 	public Message(byte[] buffer, int numRead){
+		//checks to see if it's just a handshake
 		if(buffer[0] == 19 && numRead == 68){
 			theType = MessageTypes.HANDSHAKE;
 			return;
 		}
-		
+		//checks to see if it's a keep alive message
 		if(buffer[0] == 0 && buffer[1] == 0 && buffer[2] == 0 && buffer[3] == 0){
 			theType = MessageTypes.KEEPALIVE;
 			return;
 		}
 		
 		int index = 4;
-		
+		//index = 4 if it's just a message, index = 72 if it's a handshake + message
 		if(buffer[0] == 19)
 			index = 72;
 		
