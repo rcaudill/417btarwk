@@ -30,7 +30,7 @@ public class Peer
 	public byte[] peer_id = new byte[20]; //20-byte string used as a unique ID for the client
 	public String ip;
 	public int port;
-	public BitSet completedpieces;
+	public BitSet completedPieces; // the parts that the peer this object represents has (renamed so its purpose is more obvious)
 	public byte[] my_peer_id = new byte[20];
 	
 	public byte[] handshake = new byte[49 + pstrlen]; //handshake: <pstrlen><pstr><reserved><info_hash><peer_id>
@@ -46,10 +46,9 @@ public class Peer
 	public boolean handshake_received; // this client received a handshake from the peer
 	public MessageTypes theType;
 	
+	// Status holders for what is being currently read
 	public ByteBuffer readBuffer;
-	
 	public int bytesLeft;
-	public BitSet parts; // the parts that the peer has
 	
 	
 	/**
@@ -71,7 +70,7 @@ public class Peer
 		this.readBuffer = ByteBuffer.allocate(BYTES_TO_ALLOCATE);
 		this.bytesLeft = 0;
 		
-		this.parts = new BitSet();
+		this.completedPieces = new BitSet();
 		
 		try
 		{
@@ -268,6 +267,7 @@ public class Peer
 						
 						// Handle Have message:
 						int piece_index = readBuffer.getInt(5);
+						this.completedPieces.set(piece_index, true);
 						
 						// More
 						
@@ -293,7 +293,7 @@ public class Peer
 						byte[] ba = new byte[length - 1];
 						readBuffer.position(5);
 						readBuffer.get(ba);
-						this.parts = BitTortoise.bitSetFromByteArray(ba);
+						this.completedPieces = BitTortoise.bitSetFromByteArray(ba);
 						
 						// More??
 						
@@ -403,7 +403,7 @@ public class Peer
 		
 		return true;
 	}
-
+	
 	/**
 	 * Given a buf[] it figures out what it is and does the appropriate action. 
 	 * !!!NOT COMPLETED!!! - it works for some the easy stuff, but i haven't made it
