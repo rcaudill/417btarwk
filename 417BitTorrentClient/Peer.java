@@ -30,7 +30,7 @@ public class Peer
 	public byte[] peer_id = new byte[20]; //20-byte string used as a unique ID for the client
 	public String ip;
 	public int port;
-	
+	public BitSet completedpieces;
 	public byte[] my_peer_id = new byte[20];
 	
 	public byte[] handshake = new byte[49 + pstrlen]; //handshake: <pstrlen><pstr><reserved><info_hash><peer_id>
@@ -44,6 +44,7 @@ public class Peer
 	
 	public boolean handshake_sent; // this client sent a handshake to the peer
 	public boolean handshake_received; // this client received a handshake from the peer
+	public MessageTypes theType;
 	
 	public ByteBuffer readBuffer;
 	
@@ -402,4 +403,74 @@ public class Peer
 		
 		return true;
 	}
+
+	/**
+	 * Given a buf[] it figures out what it is and does the appropriate action. 
+	 * !!!NOT COMPLETED!!! - it works for some the easy stuff, but i haven't made it
+	 * do anything complicated. it works in the sense that it will correctly identify what type of
+	 * message it is.
+	 * @param buffer - message received from a peer
+	 * @param numRead - the number of bytes read
+	 */
+	public void processMessage(byte[] buffer, int numRead){
+		//checks to see if it's just a handshake
+		if(buffer[0] == 19 && numRead == 68){
+			theType = MessageTypes.HANDSHAKE;
+			return;
+		}
+		//checks to see if it's a keep alive message
+		if(buffer[0] == 0 && buffer[1] == 0 && buffer[2] == 0 && buffer[3] == 0){
+			theType = MessageTypes.KEEPALIVE;
+			return;
+		}
+		
+		int index = 4;
+		//index = 4 if it's just a message, index = 72 if it's a handshake + message
+		if(buffer[0] == 19)
+			index = 72;
+		
+		switch(buffer[index]){
+		case 0:
+			theType = MessageTypes.CHOKE;
+			peer_choking = true;
+			break;
+		case 1:
+			theType = MessageTypes.UNCHOKE;
+			peer_choking = false;
+			break;
+		case 2:
+			theType = MessageTypes.INTERESTED;
+			peer_interested = true;
+			break;
+		case 3:
+			theType = MessageTypes.NOTINTERESTED;
+			peer_interested = false;
+			break;
+		case 4:
+			theType = MessageTypes.HAVE;
+			/*see if the piece is worthwhile*/
+			break;
+		case 5:
+			theType = MessageTypes.BITFIELD;
+			/*get the bitfield?*/
+			break;
+		case 6:
+			theType = MessageTypes.REQUEST;
+			/*figure out what piece has been requested*/
+			 break;
+		case 7:
+			theType = MessageTypes.PIECE;
+			/*do something with the piece*/
+			break;
+		case 8:
+			theType = MessageTypes.CANCEL;
+			break;
+		case 9:
+			theType = MessageTypes.PORT;
+			break;
+		default:
+			theType = MessageTypes.ERROR;
+		}
+	}
+	
 }

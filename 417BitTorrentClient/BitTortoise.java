@@ -247,10 +247,10 @@ public class BitTortoise
 				socket.getOutputStream().write(peer.handshake);
 				int numRead = socket.getInputStream().read(buffer);
 				System.out.println("Successful connect to " + peer.ip + ":" + peer.port);
-				Message theMessage = new Message(buffer, numRead);
+				peer.processMessage(buffer, numRead);
 				System.out.println(buffer);
 				System.out.println("received " + numRead + " bytes: " +  Peer.getBytesAsHex(buffer));
-				System.out.println("Message Type:" + theMessage.theType);
+				System.out.println("Message Type:" + peer.theType);
 			} catch (Exception e) {
 				System.out.println("Couldn't connect to " + peer.ip + ":" + peer.port);
 				System.out.println("removing peer from peerlist");
