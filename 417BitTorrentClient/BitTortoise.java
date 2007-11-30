@@ -245,12 +245,16 @@ public class BitTortoise
 			{ 
 				socket = new Socket(peer.ip, peer.port); 
 				socket.getOutputStream().write(peer.handshake);
-				System.out.println("Successful connect to " + peer.ip + ":" + peer.port);
 				int numRead = socket.getInputStream().read(buffer);
+				System.out.println("Successful connect to " + peer.ip + ":" + peer.port);
+				Message theMessage = new Message(buffer, numRead);
+				System.out.println(buffer);
 				System.out.println("received " + numRead + " bytes: " +  Peer.getBytesAsHex(buffer));
+				System.out.println("Message Type:" + theMessage.theType);
 			} catch (Exception e) {
 				System.out.println("Couldn't connect to " + peer.ip + ":" + peer.port);
-				e.printStackTrace();
+				System.out.println("removing peer from peerlist");
+				peerList.remove(peer);
 			}
 
 		}
