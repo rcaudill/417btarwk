@@ -92,9 +92,10 @@ public class Peer
 			ByteBuffer byteBuffer = ByteBuffer.allocate(49 + pstr.length());
 			byteBuffer.put(pstrlen);
 			byteBuffer.put(pstr.getBytes());
-			byteBuffer.put(new byte[] {0,0,0,0,0,0,0,0});
+			byteBuffer.put(new byte[] {0,0,16,0,0,0,0,1});
 			byteBuffer.put(this.info_hash);
-			byteBuffer.put(this.peer_id);
+			byteBuffer.put(new byte[] {0x2d, 0x55, 0x54, 0x31, 0x37, 0x35, 0x30, 0x2d, (byte)0xfa, (byte)0x91, 0x65, (byte)0xef, 0x09, 0x08, (byte)0x99, 0x50, 0x0c, (byte)0xa1, (byte)0xf2, 0x1f});
+			//byteBuffer.put(this.peer_id);
 			this.handshake = byteBuffer.array();
 			
 			//System.out.println("IP is" + ip);
