@@ -28,6 +28,7 @@ public class BitTortoise
 	public static void main(String args[])
 	{
 		// Torrent file, tracker, argument, and other parsed variables:
+		int numConnections; // the number of TCP connections we currently have with other peers
 		int port; // the port we are listening on
 		TorrentFile torrentFile; // the object into which the .torrent file is b-decoded
 		List<Peer> peerList; // list of Peer objects that we got from the tracker
@@ -232,7 +233,7 @@ public class BitTortoise
 			System.err.println("Error creating file: " + e.getMessage());
 			System.exit(1);
 		}
-		
+		/*
 		byte[] buffer = new byte[1000];
 		ByteBuffer byteBuffer = ByteBuffer.allocate(1000);
 		
@@ -247,17 +248,17 @@ public class BitTortoise
 				socket.getOutputStream().write(peer.handshake);
 				int numRead = socket.getInputStream().read(buffer);
 				System.out.println("Successful connect to " + peer.ip + ":" + peer.port);
-				peer.processMessage(buffer, numRead);
+				//peer.processMessage(buffer, numRead);
 				System.out.println(buffer);
 				System.out.println("received " + numRead + " bytes: " +  Peer.getBytesAsHex(buffer));
-				System.out.println("Message Type:" + peer.theType);
+				//System.out.println("Message Type:" + peer.theType);
 			} catch (Exception e) {
 				System.out.println("Couldn't connect to " + peer.ip + ":" + peer.port);
 				System.out.println("removing peer from peerlist");
 				peerList.remove(peer);
 			}
 
-		}
+		}*/
 		
 		/*
 		// Code Sample for writing to a certain area of a file:
@@ -278,7 +279,7 @@ public class BitTortoise
 		*/
 		
 		// Start the main loop of the client - choose and connect to peers, accept connections from peers, attempt to get all of the file
-		
+		numConnections = 0;
 		try
 		{
 			// Create the selector:
@@ -297,7 +298,7 @@ public class BitTortoise
 			// Main Data processing loop:
 			while(true)
 			{
-				int num = select.select(0); // equivalent: int num = select.select(0);
+				int num = select.select(0);
 				
 				if(num > 0)
 				{
@@ -307,13 +308,59 @@ public class BitTortoise
 						{
 							if(key.isAcceptable())
 							{
-								// Incoming Connection to the server channel/socket:
-								// Accept the connection, set it to not block:
-								SocketChannel newConnection = serverChannel.accept();
-								newConnection.configureBlocking(false);
+								// This must be from the server socket.
+								// Only accept new connections if we have less than a desirable number:
+								if(numConnections <= 56)
+								{
+									// Incoming Connection to the server channel/socket:
+									// Accept the connection, set it to not block:
+									SocketChannel newConnection = serverChannel.accept();
+									newConnection.configureBlocking(false);
+									
+									// Register the connection with the selector
+									newConnection.register(select, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+									
+									numConnections ++;
+								}
+							}
+							else if(key.isConnectable())
+							{
+								SocketChannel sc = (SocketChannel)key.channel();
+								Peer p = peerMap.get(sc);
 								
-								// Register the connection with the selector
-								newConnection.register(select, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+								if(sc.finishConnect())
+								{
+									try
+									{
+										sc.register(select, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+										
+										// Send handshake message to the peer:
+										sc.write(ByteBuffer.wrap(p.handshake));
+
+										// Update situation:
+										p.handshake_sent = true;
+										
+										numConnections ++;
+									}
+									catch(IOException e)
+									{
+										System.err.println("Could not open new connection to peer - " + e.getMessage());
+										
+										if(peerMap.containsValue(p))
+										{
+											removePeer(p, peerMap);
+										}
+									}
+								}
+								else
+								{
+									System.err.println("Could not open new connection to peer.");
+									
+									if(peerMap.containsValue(p))
+									{
+										removePeer(p, peerMap);
+									}
+								}
 							}
 							else if(key.isReadable())
 							{
@@ -323,7 +370,20 @@ public class BitTortoise
 								int size = -1;
 								if(peerMap.containsKey(sc))
 								{
-									peerMap.get(sc).readAndParse(sc, true);
+									if(!peerMap.get(sc).readAndProcess(sc, true))
+									{
+										key.cancel();
+										peerMap.remove(sc);
+										try
+										{
+											if(!sc.socket().isClosed())
+												sc.socket().close();
+										}
+										catch(IOException e)
+										{
+											System.err.println("Error closing socket!");
+										}
+									}
 								}
 								else
 								{
@@ -369,14 +429,29 @@ public class BitTortoise
 											connectedTo.bytesLeft = size;
 											connectedTo.readBuffer = buf;
 										}
+										
+										if(size != 0)
+										{
+											if(peerMap.get(sc).readAndProcess(sc, false))
+											{
+												key.cancel();
+												peerMap.remove(sc);
+												try
+												{
+													sc.socket().close();
+												}
+												catch(IOException e)
+												{
+													System.err.println("Error closing socket!");
+												}
+											}
+										}
 									}
 									else
 									{
 										// ignore messages that are sent before a handshake, or short handshakes...
+										continue;
 									}
-									
-									if(size != 0)
-										peerMap.get(sc).readAndParse(sc, false);
 								}
 							}
 							else if(key.isWritable())
@@ -390,19 +465,73 @@ public class BitTortoise
 						catch(IOException e)
 						{
 							System.err.println("IO error - " + e.getMessage());
+							key.cancel();
 						}
 					}
 				}
 				
-				// This may be needed for some reason:
+				// Clear the list:
 				select.selectedKeys().clear();
 				
 				// Check the number of connections, add more if needed
+				if(numConnections < 30 && peerList.size() > 0)
+				{
+					boolean succeeded = false;
+					while(!succeeded)
+					{
+						int last = peerList.size() - 1;
+						if(last >= 0)
+						{
+							Peer toConnect = peerList.get(last);
+							
+							if(!peerMap.containsValue(toConnect))
+							{
+								// Send handshake to peer:
+								try
+								{
+									// Open a new connection to the peer, set to not block:
+									SocketChannel sc = SocketChannel.open();
+									sc.configureBlocking(false);
+									sc.connect(new InetSocketAddress(toConnect.ip, toConnect.port));
+									
+									// Register the new connection with the selector:
+									sc.register(select, SelectionKey.OP_CONNECT);
+									
+									// Add the new peer to the Map:
+									peerMap.put(sc, toConnect);
+									
+									succeeded = true;
+								}
+								catch(IOException e)
+								{
+									System.err.println("Could not open new connection to peer - " + e.getMessage());
+									
+									if(peerMap.containsValue(toConnect))
+									{
+										removePeer(toConnect, peerMap);
+									}
+									
+									peerList.remove(last);
+								}
+								peerList.remove(last);
+							}
+							else
+							{
+								// Remove from the list.
+								peerList.remove(last);
+							}
+						}
+					}
+				}
+				else if(numConnections < 30)
+				{
+					// Query the tracker again to get more peers to connect to.
+				}
 			}
 		}
-		catch(Exception e)
+		catch(IOException e)
 		{
-			System.err.println("Error Occurred!" + e.getMessage());
+			System.err.println("IOException Occurred! - " + e.getMessage());
 			System.exit(1);
 		}
 		System.out.println("Success!");
@@ -490,5 +619,22 @@ public class BitTortoise
 		
 		buf.position(0);
 		return true;
+	}
+	
+	/**
+	 * Remove the peer p from the map m 
+	 * 
+	 * @param p the Peer that we are removing from the map
+	 * @param m the Map from which we are removing the peer
+	 */
+	public static void removePeer(Peer p, Map<SocketChannel, Peer> m)
+	{
+		for(Map.Entry<SocketChannel, Peer> e : m.entrySet())
+		{
+			if(e.getValue().equals(p)){
+				m.remove(e.getKey());
+				return;
+			}
+		}
 	}
 }
