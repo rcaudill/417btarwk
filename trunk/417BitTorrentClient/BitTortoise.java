@@ -41,7 +41,8 @@ public class BitTortoise
 		byte[] my_peer_id = new byte[20]; // the peer id that this client is using
 		
 		// State variables:
-		BitSet completedPieces; // Whether the Pieces/blocks of the file are completed or not 
+		BitSet completedPieces; // Whether the Pieces/blocks of the file are completed or not
+		BitSet alreadyRequested; // Pieces that have been requested inside a peer.
 		int totalPieceCount = 0;
 		Map<SocketChannel, Peer> peerMap = new HashMap<SocketChannel, Peer>();
 		
@@ -279,6 +280,7 @@ public class BitTortoise
 		*/
 		
 		// Start the main loop of the client - choose and connect to peers, accept connections from peers, attempt to get all of the file
+		alreadyRequested = new BitSet();
 		numConnections = 0;
 		try
 		{
@@ -456,8 +458,10 @@ public class BitTortoise
 							}
 							else if(key.isWritable())
 							{
-								System.out.println("writable");
-								// if this is a peer we are writing to, that's 
+								// Get the peer 
+								SocketChannel sc = (SocketChannel)key.channel();
+								Peer writablePeer = peerMap.get(sc);
+								writablePeer.sendMessage(sc, alreadyRequested, completedPieces);
 							}
 							else
 								System.out.println("other");
