@@ -39,6 +39,7 @@ public class BitTortoise
 		int incomplete; // number of leechers/peers providing 0+ parts of the file (but are not seeders)
 		RandomAccessFile destinationFile; // The file into which we are writing
 		byte[] my_peer_id = new byte[20]; // the peer id that this client is using
+		Tracker tracker = null;
 		
 		// State variables:
 		BitSet completedPieces; // Whether the Pieces/blocks of the file are completed or not
@@ -94,6 +95,8 @@ public class BitTortoise
 		incomplete = 0; // number of leechers/peers providing 0+ parts of the file (but are not seeders)
 		try
 		{
+			tracker = new Tracker(torrentFile);
+
 			// Using the parsed torrent file, ping the tracker and get a list of peers to connect to:
 			HttpURLConnection connection = (HttpURLConnection)(new URL(torrentFile.tracker_url + "?" +
 					"info_hash=" + torrentFile.info_hash_as_url + "&" +
@@ -102,106 +105,8 @@ public class BitTortoise
 					"left=" + torrentFile.file_length + "&" +
 					"peer_id=" + TorrentFileHandler.byteArrayToURLString(my_peer_id) + "&" +
 					"port=" + port).openConnection());
-			connection.setRequestMethod("GET");
-			connection.connect();
-			
-			// get's the reply from the tracker
-			InputStream in = connection.getInputStream();
-			
-			// Decode the returned message, translate it into peer objects and such.
-			Object response = Bencoder.bdecode(in);
-			if(response instanceof Map)
-			{
-				Map responseMap = (Map)response;
-				
-				if(responseMap.containsKey("failure reason"))
-				{
-					System.err.println("Tracker reported the following failure: " + responseMap.get("failure reason"));
-					System.exit(1);
-				}
-				else
-				{
-					if(responseMap.containsKey("peers"))
-					{
-						Object p = responseMap.get("peers");
-						
-						if(p instanceof List)
-						{
-							List peers = (List)p;
-							
-							for(Object o : peers)
-							{
-								if(o instanceof Map)
-								{
-									Map peerInformation = (Map)o;
-									
-									if(peerInformation.containsKey("peer id") && peerInformation.containsKey("port") && peerInformation.containsKey("ip"))
-									{
-										peerList.add(new Peer(torrentFile.info_hash_as_binary, (byte[])peerInformation.get("peer id"), my_peer_id, new String((byte[])(peerInformation.get("ip"))), (Integer)peerInformation.get("port")));
-									}
-									else
-									{
-										System.err.println("Tracker gave a bad peer response.  Skipping...");
-									}
-								}
-								else
-								{
-									System.err.println("Tracker gave a bad peer response.  Skipping...");
-								}
-							}
-						}
-						else
-						{
-							System.err.println("Tracker returned no peers.");
-							System.exit(1);
-						}
-					}
-					else
-					{
-						System.err.println("Tracker returned no peers.");
-						System.exit(1);
-					}
-					
-					if(responseMap.containsKey("interval"))
-					{
-						interval = (Integer)responseMap.get("interval");
-					}
-					
-					if(responseMap.containsKey("min interval"))
-					{
-						min_interval = (Integer)responseMap.get("min interval");
-					}
-					
-					if(responseMap.containsKey("tracker id"))
-					{
-						tracker_id = new String((byte[])responseMap.get("tracker id"));
-					}
-					
-					if(responseMap.containsKey("complete"))
-					{
-						complete = (Integer)responseMap.get("complete");
-					}
-					
-					if(responseMap.containsKey("incomplete"))
-					{
-						incomplete = (Integer)responseMap.get("incomplete");
-					}
-					
-					if(responseMap.containsKey("warning message"))
-					{
-						System.err.println("Tracker Warning: " + new String((byte[])responseMap.get("warning message")));
-					}
-				}
-			}
-			else
-			{
-				System.err.println("Tracker returned an unexpected type.");
-				System.exit(1);
-			}
-			
-			// i did this in my example, i'm going to check if i need to keep these open. -andrew
-			//in.close();
-			//connection.disconnect();
+			tracker.connect(connection, my_peer_id);
+			peerList = tracker.peerList;
 		}
 		catch (UnknownHostException e)
 		{
@@ -300,7 +205,7 @@ public class BitTortoise
 			// Main Data processing loop:
 			while(true)
 			{
-				int num = select.select(0);
+				int num = select.selectNow();
 				
 				if(num > 0)
 				{
@@ -459,9 +364,9 @@ public class BitTortoise
 							else if(key.isWritable())
 							{
 								// Get the peer 
-								SocketChannel sc = (SocketChannel)key.channel();
+								/*SocketChannel sc = (SocketChannel)key.channel();
 								Peer writablePeer = peerMap.get(sc);
-								writablePeer.sendMessage(sc, alreadyRequested, completedPieces);
+								writablePeer.sendMessage(sc, alreadyRequested, completedPieces);*/
 							}
 							else
 								System.out.println("other");
@@ -529,7 +434,8 @@ public class BitTortoise
 				}
 				else if(numConnections < 30)
 				{
-					// Query the tracker again to get more peers to connect to.
+					tracker.connect();
+					peerList = tracker.peerList;
 				}
 			}
 		}
