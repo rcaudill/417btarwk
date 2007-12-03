@@ -37,7 +37,7 @@ public class Peer
 	
 	// Other information:
 	public byte[] handshake = new byte[49 + pstrlen]; //handshake: <pstrlen><pstr><reserved><info_hash><peer_id>
-	
+	public ByteBuffer handshake_as_ByteBuffer;
 	
 	// State for transfers:
 	public boolean am_choking; //this client is choking the peer
@@ -91,13 +91,14 @@ public class Peer
 		try
 		{
 			//handshake: <pstrlen><pstr><reserved><info_hash><peer_id>
-			ByteBuffer byteBuffer = ByteBuffer.allocate(49 + pstr.length());
-			byteBuffer.put(pstrlen);
-			byteBuffer.put(pstr.getBytes());
-			byteBuffer.put(new byte[] {0,0,16,0,0,0,0,1});
-			byteBuffer.put(this.info_hash);
-			byteBuffer.put(this.my_peer_id);
-			this.handshake = byteBuffer.array();
+			handshake_as_ByteBuffer = ByteBuffer.allocate(49 + pstr.length());
+			handshake_as_ByteBuffer.put(pstrlen);
+			handshake_as_ByteBuffer.put(pstr.getBytes());
+			handshake_as_ByteBuffer.put(new byte[] {0,0,16,0,0,0,0,1});
+			handshake_as_ByteBuffer.put(this.info_hash);
+			handshake_as_ByteBuffer.put(new byte[] {0x2d, 0x55, 0x54, 0x31, 0x37, 0x35, 0x30, 0x2d, (byte)0xfa, (byte)0x91, 0x65, (byte)0xef, 0x09, 0x08, (byte)0x99, 0x50, 0x0c, (byte)0xa1, (byte)0xf2, 0x1f});
+			//byteBuffer.put(this.peer_id);
+			this.handshake = handshake_as_ByteBuffer.array();
 		}
 		catch(Exception e)
 		{
@@ -131,6 +132,7 @@ public class Peer
 	
 	public boolean readAndProcess(SocketChannel socketChannel, boolean readFirst)
 	{
+		System.out.println("reading data");
 		boolean cont = true;
 		if(readFirst)
 		{
@@ -400,5 +402,18 @@ public class Peer
 		}
 		
 		return true;
+	}
+	
+	public void sendHandshake(SocketChannel sc) {
+		ByteBuffer byteBuffer = ByteBuffer.allocate(1000);
+		byteBuffer.put(handshake);
+		try {
+			sc.write(byteBuffer);
+		} catch (IOException e) {
+			System.out.println("Error sending handshake");
+			/* do something useful here */
+			e.printStackTrace();
+		}
+		handshake_sent = true;
 	}
 }
