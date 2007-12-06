@@ -336,6 +336,7 @@ public class Peer
 					// Handle Piece message:
 					int piece_index = readBuffer.getInt(5);
 					int piece_begin = readBuffer.getInt(9);
+					int piece_length = length - 9;
 					
 					byte[] block;
 					
