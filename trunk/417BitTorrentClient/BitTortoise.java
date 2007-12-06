@@ -40,6 +40,8 @@ public class BitTortoise
 		RandomAccessFile destinationFile; // The file into which we are writing
 		byte[] my_peer_id = new byte[20]; // the peer id that this client is using
 		Tracker tracker = null;
+		ArrayList<Piece> outstandingPieces = new ArrayList<Piece>();
+		int block_length = 16384; //The reality is near all clients will now use 2^14 (16KB) requests. Due to clients that enforce that size, it is recommended that implementations make requests of that size. (TheoryOrg spec)
 		
 		// State variables:
 		BitSet completedPieces; // Whether the Pieces/blocks of the file are completed or not
@@ -85,6 +87,17 @@ public class BitTortoise
 		
 		totalPieceCount = ((int)torrentFile.file_length/torrentFile.piece_length) + 1;
 		completedPieces = new BitSet(totalPieceCount);
+		
+		System.out.println("file length is " + torrentFile.file_length);
+		System.out.println("Piece length is " + torrentFile.piece_length);
+		for (int i=0; i < totalPieceCount; i++) {
+			outstandingPieces.add(new Piece(i));
+			for (int j=0; j < torrentFile.piece_length / block_length; j++) {
+				outstandingPieces.get(i).addBlock(j, block_length);
+			}
+		}
+		
+		System.out.println(outstandingPieces); 
 		
 		// Extract a list of peers, and other information from the tracker:
 		peerList = new LinkedList<Peer>(); // List of peer objects (uses Generics)
