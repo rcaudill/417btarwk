@@ -1,10 +1,10 @@
-import java.nio.ByteBuffer;
+import java.nio.*;
+import java.nio.channels.*;
 
 
 public class HelloWorld {
 	public static void main(String [] args) {
-		System.out.println("hello world");
-		System.out.println("hello andrew");
+		System.out.println("hello world. Accept: " + SelectionKey.OP_ACCEPT + ", Connect: " + SelectionKey.OP_CONNECT + ", Write: " + SelectionKey.OP_WRITE + ", Read: " + SelectionKey.OP_READ);
 		/*
 		// Handshake Message Received:
 		byte[] bytes = (new String("" + ((char)19) + "BitTorrent protocol" + new String(new byte[]{0,0,0,0,0,0,0,0}) + new String(new byte[]{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,14,13,12,11,1}) + new String(new byte[]{15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0,1,2,3,4}) + new String(new byte[]{0,0,0,1,3}))).getBytes();
@@ -47,6 +47,7 @@ public class HelloWorld {
 			result += (b + ", ");
 		System.out.println(result.substring(0, result.lastIndexOf(", ")));
 		*/
+		/*
 		byte[] my_peer_id = new byte[20];
 		my_peer_id[0] = (byte)'-';// Replace the beginning of the id with "-BT0001-" to mimic normal naming schemes 
 		my_peer_id[1] = (byte)'B'; 
@@ -59,6 +60,6 @@ public class HelloWorld {
 		for(int i = 8; i < my_peer_id.length; i ++)
 			my_peer_id[i] = (byte)((Math.random() * 0x5F) + 0x20);
 		
-		System.out.println(new String(my_peer_id));
+		System.out.println(new String(my_peer_id));*/
 	}
 }

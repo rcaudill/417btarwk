@@ -47,7 +47,8 @@ public class BitTortoise
 		BitSet completedPieces; // Whether the Pieces/blocks of the file are completed or not
 		BitSet alreadyRequested; // Pieces that have been requested inside a peer.
 		int totalPieceCount = 0;
-		Map<SocketChannel, Peer> peerMap = new HashMap<SocketChannel, Peer>();
+		Map<SocketChannel, Peer> activePeerMap = new HashMap<SocketChannel, Peer>();
+		Map<SocketChannel, Peer> pendingPeerMap = new HashMap<SocketChannel, Peer>();
 		
 		// Generate a peer_id:
 		my_peer_id[0] = (byte)'-'; // Replace the beginning of the id with "-BT0001-" to mimic normal naming schemes 
@@ -246,7 +247,7 @@ public class BitTortoise
 							else if(key.isConnectable())
 							{
 								SocketChannel sc = (SocketChannel)key.channel();
-								Peer p = peerMap.get(sc);
+								Peer p = pendingPeerMap.get(sc);
 								
 								if(sc.finishConnect())
 								{
@@ -254,9 +255,12 @@ public class BitTortoise
 									{
 										sc.register(select, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
 										
+										pendingPeerMap.remove(sc);
+										activePeerMap.put(sc, p);
+										
 										// Send handshake message to the peer:
 										sc.write(ByteBuffer.wrap(p.handshake));
-
+										
 										// Update situation:
 										p.handshake_sent = true;
 										
@@ -266,20 +270,22 @@ public class BitTortoise
 									{
 										System.err.println("Could not open new connection to peer - " + e.getMessage());
 										
-										if(peerMap.containsValue(p))
+										if(activePeerMap.containsValue(p))
 										{
-											removePeer(p, peerMap);
+											removePeer(p, activePeerMap);
 										}
+										key.cancel();
 									}
 								}
 								else
 								{
 									System.err.println("Could not open new connection to peer.");
 									
-									if(peerMap.containsValue(p))
+									if(pendingPeerMap.containsValue(p))
 									{
-										removePeer(p, peerMap);
+										removePeer(p, pendingPeerMap);
 									}
+									key.cancel();
 								}
 							}
 							else if(key.isReadable())
@@ -288,12 +294,12 @@ public class BitTortoise
 								// read, process inputs
 								// Check if this SocketChannel is already mapping to a peer - if not, we can only accept a handshake from it - if so, we are cool
 								int size = -1;
-								if(peerMap.containsKey(sc))
+								if(activePeerMap.containsKey(sc))
 								{
-									if(!peerMap.get(sc).readAndProcess(sc, true))
+									if(!activePeerMap.get(sc).readAndProcess(sc, true))
 									{
 										key.cancel();
-										peerMap.remove(sc);
+										activePeerMap.remove(sc);
 										try
 										{
 											if(!sc.socket().isClosed())
@@ -336,9 +342,9 @@ public class BitTortoise
 										{
 											Peer connectedTo = new Peer(torrentFile.info_hash_as_binary, external_peer_id, my_peer_id, sc.socket().getInetAddress().getHostAddress(), sc.socket().getPort());
 											
-											if(!peerMap.containsValue(connectedTo))
+											if(!activePeerMap.containsValue(connectedTo))
 											{
-												peerMap.put(sc, connectedTo);
+												activePeerMap.put(sc, connectedTo);
 											}
 											else
 											{
@@ -352,13 +358,14 @@ public class BitTortoise
 										
 										if(size != 0)
 										{
-											if(peerMap.get(sc).readAndProcess(sc, false))
+											if(!activePeerMap.get(sc).readAndProcess(sc, false))
 											{
 												key.cancel();
-												peerMap.remove(sc);
+												activePeerMap.remove(sc);
 												try
 												{
-													sc.socket().close();
+													if(sc.isOpen())
+														sc.close();
 												}
 												catch(IOException e)
 												{
@@ -377,9 +384,15 @@ public class BitTortoise
 							else if(key.isWritable())
 							{
 								// Get the peer 
-								/*SocketChannel sc = (SocketChannel)key.channel();
-								Peer writablePeer = peerMap.get(sc);
-								writablePeer.sendMessage(sc, alreadyRequested, completedPieces);*/
+								SocketChannel sc = (SocketChannel)key.channel();
+								
+								// Attempt to write to this peer iff it is a peer that we have an active connection with
+								// Note: incoming connections from which we have not yet received the handshake will not be in the activePeerMap
+								if(activePeerMap.containsKey(sc))
+								{
+									Peer writablePeer = activePeerMap.get(sc);
+									writablePeer.sendMessage(sc, alreadyRequested, completedPieces);
+								}
 							}
 							else
 								System.out.println("other");
@@ -406,9 +419,10 @@ public class BitTortoise
 						{
 							Peer toConnect = peerList.get(last);
 							
-							if(!peerMap.containsValue(toConnect))
+							if(!activePeerMap.containsValue(toConnect) && !pendingPeerMap.containsValue(toConnect))
 							{
 								// Send handshake to peer:
+								SelectionKey temp = null;
 								try
 								{
 									// Open a new connection to the peer, set to not block:
@@ -417,10 +431,10 @@ public class BitTortoise
 									sc.connect(new InetSocketAddress(toConnect.ip, toConnect.port));
 									
 									// Register the new connection with the selector:
-									sc.register(select, SelectionKey.OP_CONNECT);
+									temp = sc.register(select, SelectionKey.OP_CONNECT);
 									
 									// Add the new peer to the Map:
-									peerMap.put(sc, toConnect);
+									pendingPeerMap.put(sc, toConnect);
 									
 									succeeded = true;
 								}
@@ -428,12 +442,15 @@ public class BitTortoise
 								{
 									System.err.println("Could not open new connection to peer - " + e.getMessage());
 									
-									if(peerMap.containsValue(toConnect))
+									if(pendingPeerMap.containsValue(toConnect))
 									{
-										removePeer(toConnect, peerMap);
+										removePeer(toConnect, pendingPeerMap);
 									}
 									
 									peerList.remove(last);
+									
+									if(temp != null)
+										temp.cancel();
 								}
 								peerList.remove(last);
 							}
