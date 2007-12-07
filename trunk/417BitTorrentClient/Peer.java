@@ -47,6 +47,7 @@ public class Peer
 	public boolean handshake_sent; // this client sent a handshake to the peer
 	public boolean handshake_received; // this client received a handshake from the peer
 	
+	public BlockRequest blockRequest = null; //the block that you have requested for this peer to send you.
 	// Status holders for what is being currently read
 	public ByteBuffer readBuffer;
 	public int bytesLeft;
@@ -128,278 +129,40 @@ public class Peer
 		return false;
 	}
 	
-	public boolean readAndProcess(SocketChannel socketChannel, boolean readFirst)
-	{
-		boolean cont = true;
-		if(readFirst)
+	
+	public void requestMessage() {
+		
+	}
+	
+	public byte[] sendPiece(BlockRequest br, TorrentFile torrentFile) {
+		int fileOffset = (br.piece * torrentFile.piece_length) + br.offset; 
+		byte [] b = new byte[1000];
+		try
 		{
-			// Information has not been read from the SocketChannel yet.. Do so
-			try
-			{
-				this.bytesLeft += socketChannel.read(readBuffer);
-				readBuffer.position(0);
-			}
-			catch(IOException e)
-			{
-				return false;
-			}
+			RandomAccessFile raf = new RandomAccessFile("test.jpg","rw");
+			raf.read(b, fileOffset, 1000);
+			raf.close();
 		}
-		if(!this.handshake_received )
+		catch(IOException e)
 		{
-			if(this.bytesLeft >= 68 && BitTortoise.isHandshakeMessage(readBuffer))
-			{
-				// Handshake Message Received:
-				byte[] external_info_hash = new byte[20];
-				byte[] external_peer_id = new byte[20];
-				
-				this.readBuffer.position(28);
-				this.readBuffer.get(external_info_hash, 0, 20);
-				
-				this.readBuffer.position(48);
-				this.readBuffer.get(external_peer_id, 0, 20);
-				
-				this.readBuffer.position(68);
-				this.readBuffer.compact();
-				this.readBuffer.position(0);
-				this.bytesLeft -= 68;
-				
-				// Check if the info hash that was given matches the one we are providing (by wrapping in a ByteBuffer, using .equals)
-				if(!ByteBuffer.wrap(external_info_hash).equals(ByteBuffer.wrap(this.info_hash)))
-				{
-					// Peer requested connection for a bad info hash - Throw out connection ?
-					return false;
-				}
-				
-				this.handshake_received = true;
-			}
-			else
-			{
-				return false;
-			}
+			System.out.println("error occurred.");
 		}
-		while(this.bytesLeft >= 4 && cont)
+		return b;
+	}
+	
+	public int storePiece(BlockRequest br, byte[] bArr, TorrentFile torrentFile) {
+		int fileOffset = (br.piece * torrentFile.piece_length) + br.offset; 
+		try
 		{
-			// Attempt to read (may be a partial message)
-			
-			// While there are still messages in the queue:
-			int length = readBuffer.getInt(0);
-			
-			if(length == 0)
-			{
-				// Keep-Alive message
-				readBuffer.position(4);
-				readBuffer.compact();
-				readBuffer.position(0);
-				
-				this.bytesLeft -= 4;
-			}
-			else if(length >= 1 && this.bytesLeft >= 5)
-			{
-				byte id = readBuffer.get(4);
-				if(id == 0)
-				{
-					// Choke Message Received:
-					
-					// Handle choke message:
-					this.peer_choking = true;
-					
-					// Perform state cleanup:
-					readBuffer.position(5);
-					readBuffer.compact();
-					readBuffer.position(0);
-					
-					this.bytesLeft -= 5;
-				}
-				else if(id == 1)
-				{
-					// Un-choke Message Received:
-					
-					// Handle un-choke message:
-					this.peer_choking = false;
-					
-					// Perform state cleanup:
-					readBuffer.position(5);
-					readBuffer.compact();
-					readBuffer.position(0);
-					
-					this.bytesLeft -= 5;
-				}
-				else if(id == 2)
-				{
-					// Interested Message Received:
-					
-					// Handle Interested message:
-					this.peer_interested = true;
-					
-					// Perform state cleanup:
-					readBuffer.position(5);
-					readBuffer.compact();
-					readBuffer.position(0);
-					
-					this.bytesLeft -= 5;
-				}
-				else if(id == 3)
-				{
-					// Not Interested Message Received:
-					
-					// Handle Not Interested  message:
-					this.peer_interested = false;
-					
-					// Perform state cleanup:
-					readBuffer.position(5);
-					readBuffer.compact();
-					readBuffer.position(0);
-					
-					this.bytesLeft -= 5;
-				}
-				else if(id == 4)
-				{
-					if(this.bytesLeft < 9)
-					{
-						cont = false;
-					}
-					else
-					{
-						// Have Message Received:
-						
-						// Handle Have message:
-						int piece_index = readBuffer.getInt(5);
-						this.completedPieces.set(piece_index, true);
-						
-						// More
-						
-						// Perform state cleanup:
-						readBuffer.position(9);
-						readBuffer.compact();
-						readBuffer.position(0);
-						
-						this.bytesLeft -= 9;
-					}
-				}
-				else if(id == 5)
-				{
-					if(this.bytesLeft < length + 4) // There might be a better way... (check the actual length of the file?)
-					{
-						cont = false;
-					}
-					else
-					{
-						// Bitfield Message Received:
-						
-						// Handle Bitfield message:
-						byte[] ba = new byte[length - 1];
-						readBuffer.position(5);
-						readBuffer.get(ba);
-						this.completedPieces = BitTortoise.bitSetFromByteArray(ba);
-						
-						// More??
-						
-						// Perform state cleanup:
-						readBuffer.position(length + 4);
-						readBuffer.compact();
-						readBuffer.position(0);
-						
-						this.bytesLeft -= (length + 4);
-					}
-				}
-				else if(id == 6)
-				{
-					if(this.bytesLeft < 17)
-					{
-						cont = false;
-					}
-					else
-					{
-						// Request Message Received:
-						
-						// Handle Request message:
-						int request_index = readBuffer.getInt(5);
-						int request_begin = readBuffer.getInt(9);
-						int request_length = readBuffer.getInt(13);
-						
-						// More
-						
-						// Perform state cleanup:
-						readBuffer.position(17);
-						readBuffer.compact();
-						readBuffer.position(0);
-						
-						this.bytesLeft -= 17;
-					}
-				}
-				else if(id == 7)
-				{
-					// Note: handle size somehow...
-					
-					// Piece Message Received:
-					
-					// Handle Piece message:
-					int piece_index = readBuffer.getInt(5);
-					int piece_begin = readBuffer.getInt(9);
-					int piece_length = length - 9;
-					
-					byte[] block;
-					
-					// More
-					
-					// Perform state cleanup:
-					readBuffer.position(length + 4);
-					readBuffer.compact();
-					readBuffer.position(0);
-					
-					this.bytesLeft -= (length + 4);
-				}
-				else if(id == 8)
-				{
-					if(this.bytesLeft < 17)
-					{
-						cont = false;
-					}
-					else
-					{
-						// Cancel Message Received:
-						
-						// Handle Cancel message:
-						int cancel_index = readBuffer.getInt(5);
-						int cancel_begin = readBuffer.getInt(9);
-						int cancel_length = readBuffer.getInt(13);
-						
-						
-						// More
-						
-						// Perform state cleanup:
-						readBuffer.position(17);
-						readBuffer.compact();
-						readBuffer.position(0);
-						
-						this.bytesLeft -= 17;
-					}
-				}
-				else
-				{
-					// Unrecognized id, ignore the rest of length bytes
-					if(this.bytesLeft < 17)
-					{
-						cont = false;
-					}
-					else
-					{
-						readBuffer.position(length + 4);
-						readBuffer.compact();
-						readBuffer.position(0);
-						
-						this.bytesLeft -= (length + 4);
-					}
-				}
-			}
+			RandomAccessFile raf = new RandomAccessFile("myfile.jpg","rw");
+			raf.write(bArr, fileOffset, 1000);
+		}
+		catch(IOException e)
+		{
+			System.out.println("error occurred.");
 		}
 		
-		if(this.bytesLeft >= 0)
-		{
-			readBuffer.position(this.bytesLeft);
-		}
-		
-		return true;
+		return 0;
 	}
 	
 	public void sendMessage(SocketChannel sc, BitSet alreadyRequested, BitSet completedPieces)
