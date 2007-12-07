@@ -20,6 +20,13 @@ import java.nio.channels.*;
 
 public class BitTortoise
 {
+	
+	private static TorrentFile torrentFile; // the object into which the .torrent file is b-decoded
+	private static RandomAccessFile destinationFile; // The file into which we are writing
+	private static ArrayList<Piece> outstandingPieces = new ArrayList<Piece>();
+	private static int block_length = 16384; //The reality is near all clients will now use 2^14 (16KB) requests. Due to clients that enforce that size, it is recommended that implementations make requests of that size. (TheoryOrg spec)
+	
+	
 	/**
 	 * Usage: "java bittortoise <torrent_file> [<destination_file> [port]]" 
 	 * 
@@ -30,18 +37,14 @@ public class BitTortoise
 		// Torrent file, tracker, argument, and other parsed variables:
 		int numConnections; // the number of TCP connections we currently have with other peers
 		int port; // the port we are listening on
-		TorrentFile torrentFile; // the object into which the .torrent file is b-decoded
 		List<Peer> peerList; // list of Peer objects that we got from the tracker
 		int interval; // seconds the client should wait before sending a regular request to the tracker
 		int min_interval; // seconds the client must wait before sending a regular request to the tracker
 		String tracker_id; // a string to send back on next announcements
 		int complete; // number of seeders/peers with the entire file
 		int incomplete; // number of leechers/peers providing 0+ parts of the file (but are not seeders)
-		RandomAccessFile destinationFile; // The file into which we are writing
 		byte[] my_peer_id = new byte[20]; // the peer id that this client is using
 		Tracker tracker = null;
-		ArrayList<Piece> outstandingPieces = new ArrayList<Piece>();
-		int block_length = 16384; //The reality is near all clients will now use 2^14 (16KB) requests. Due to clients that enforce that size, it is recommended that implementations make requests of that size. (TheoryOrg spec)
 		
 		// State variables:
 		BitSet completedPieces; // Whether the Pieces/blocks of the file are completed or not
@@ -94,11 +97,18 @@ public class BitTortoise
 		for (int i=0; i < totalPieceCount; i++) {
 			outstandingPieces.add(new Piece(i));
 			for (int j=0; j < torrentFile.piece_length / block_length; j++) {
-				outstandingPieces.get(i).addBlock(j, block_length);
+				outstandingPieces.get(i).addBlock(j * block_length, block_length);
 			}
 		}
 		
-		System.out.println(outstandingPieces); 
+		Peer myPeer = new Peer(torrentFile.info_hash_as_binary, new byte [50], my_peer_id, "a", 3);
+		byte [] b = myPeer.sendPiece(outstandingPieces.get(0).getBlock(), torrentFile);
+		myPeer.storePiece(outstandingPieces.get(0).getBlock(), b, torrentFile);
+		for (int i=0; i<1000; i++) {
+		System.out.println(b[i]);
+		}
+		//System.out.println(outstandingPieces); 
+		System.exit(0);
 		
 		// Extract a list of peers, and other information from the tracker:
 		peerList = new LinkedList<Peer>(); // List of peer objects (uses Generics)
@@ -296,7 +306,7 @@ public class BitTortoise
 								int size = -1;
 								if(activePeerMap.containsKey(sc))
 								{
-									if(!activePeerMap.get(sc).readAndProcess(sc, true))
+									if(!readAndProcess(activePeerMap.get(sc), sc, true))
 									{
 										key.cancel();
 										activePeerMap.remove(sc);
@@ -358,7 +368,7 @@ public class BitTortoise
 										
 										if(size != 0)
 										{
-											if(!activePeerMap.get(sc).readAndProcess(sc, false))
+											if(!readAndProcess(activePeerMap.get(sc), sc, false))
 											{
 												key.cancel();
 												activePeerMap.remove(sc);
@@ -577,4 +587,327 @@ public class BitTortoise
 			}
 		}
 	}
+	
+
+	public static boolean readAndProcess(Peer p, SocketChannel socketChannel, boolean readFirst)
+	{
+		boolean cont = true;
+		if(readFirst)
+		{
+			// Information has not been read from the SocketChannel yet.. Do so
+			try
+			{
+				p.bytesLeft += socketChannel.read(p.readBuffer);
+				p.readBuffer.position(0);
+			}
+			catch(IOException e)
+			{
+				return false;
+			}
+		}
+		if(!p.handshake_received )
+		{
+			if(p.bytesLeft >= 68 && BitTortoise.isHandshakeMessage(p.readBuffer))
+			{
+				// Handshake Message Received:
+				byte[] external_info_hash = new byte[20];
+				byte[] external_peer_id = new byte[20];
+				
+				p.readBuffer.position(28);
+				p.readBuffer.get(external_info_hash, 0, 20);
+				
+				p.readBuffer.position(48);
+				p.readBuffer.get(external_peer_id, 0, 20);
+				
+				p.readBuffer.position(68);
+				p.readBuffer.compact();
+				p.readBuffer.position(0);
+				p.bytesLeft -= 68;
+				
+				// Check if the info hash that was given matches the one we are providing (by wrapping in a ByteBuffer, using .equals)
+				if(!ByteBuffer.wrap(external_info_hash).equals(ByteBuffer.wrap(p.info_hash)))
+				{
+					// Peer requested connection for a bad info hash - Throw out connection ?
+					return false;
+				}
+				
+				p.handshake_received = true;
+			}
+			else
+			{
+				return false;
+			}
+		}
+		while(p.bytesLeft >= 4 && cont)
+		{
+			// Attempt to read (may be a partial message)
+			
+			// While there are still messages in the queue:
+			int length = p.readBuffer.getInt(0);
+			
+			if(length == 0)
+			{
+				// Keep-Alive message
+				p.readBuffer.position(4);
+				p.readBuffer.compact();
+				p.readBuffer.position(0);
+				
+				p.bytesLeft -= 4;
+			}
+			else if(length >= 1 && p.bytesLeft >= 5)
+			{
+				byte id = p.readBuffer.get(4);
+				if(id == 0)
+				{
+					// Choke Message Received:
+					
+					// Handle choke message:
+					p.peer_choking = true;
+					
+					// Perform state cleanup:
+					p.readBuffer.position(5);
+					p.readBuffer.compact();
+					p.readBuffer.position(0);
+					
+					p.bytesLeft -= 5;
+				}
+				else if(id == 1)
+				{
+					// Un-choke Message Received:
+					
+					// Handle un-choke message:
+					p.peer_choking = false;
+					
+					// Perform state cleanup:
+					p.readBuffer.position(5);
+					p.readBuffer.compact();
+					p.readBuffer.position(0);
+					
+					p.bytesLeft -= 5;
+				}
+				else if(id == 2)
+				{
+					// Interested Message Received:
+					
+					// Handle Interested message:
+					p.peer_interested = true;
+					
+					// Perform state cleanup:
+					p.readBuffer.position(5);
+					p.readBuffer.compact();
+					p.readBuffer.position(0);
+					
+					p.bytesLeft -= 5;
+				}
+				else if(id == 3)
+				{
+					// Not Interested Message Received:
+					
+					// Handle Not Interested  message:
+					p.peer_interested = false;
+					
+					// Perform state cleanup:
+					p.readBuffer.position(5);
+					p.readBuffer.compact();
+					p.readBuffer.position(0);
+					
+					p.bytesLeft -= 5;
+				}
+				else if(id == 4)
+				{
+					if(p.bytesLeft < 9)
+					{
+						cont = false;
+					}
+					else
+					{
+						// Have Message Received:
+						
+						// Handle Have message:
+						int piece_index = p.readBuffer.getInt(5);
+						p.completedPieces.set(piece_index, true);
+						
+						// More
+						
+						// Perform state cleanup:
+						p.readBuffer.position(9);
+						p.readBuffer.compact();
+						p.readBuffer.position(0);
+						
+						p.bytesLeft -= 9;
+					}
+				}
+				else if(id == 5)
+				{
+					if(p.bytesLeft < length + 4) // There might be a better way... (check the actual length of the file?)
+					{
+						cont = false;
+					}
+					else
+					{
+						// Bitfield Message Received:
+						
+						// Handle Bitfield message:
+						byte[] ba = new byte[length - 1];
+						p.readBuffer.position(5);
+						p.readBuffer.get(ba);
+						p.completedPieces = BitTortoise.bitSetFromByteArray(ba);
+						
+						// More??
+						
+						// Perform state cleanup:
+						p.readBuffer.position(length + 4);
+						p.readBuffer.compact();
+						p.readBuffer.position(0);
+						
+						p.bytesLeft -= (length + 4);
+					}
+				}
+				else if(id == 6)
+				{
+					if(p.bytesLeft < 17)
+					{
+						cont = false;
+					}
+					else
+					{
+						// Request Message Received:
+						
+						// Handle Request message:
+						int request_index = p.readBuffer.getInt(5);
+						int request_begin = p.readBuffer.getInt(9);
+						int request_length = p.readBuffer.getInt(13);
+						
+						
+						byte [] message = getPiece(request_index, request_begin, request_length);
+						try {
+							socketChannel.write(ByteBuffer.wrap(message));
+						} catch (Exception e) {
+							System.out.println("Unable to write piece message to peer");
+							return false;
+						}
+						// Perform state cleanup:
+						p.readBuffer.position(17);
+						p.readBuffer.compact();
+						p.readBuffer.position(0);
+						
+						p.bytesLeft -= 17;
+					}
+				}
+				else if(id == 7)
+				{
+					// Note: handle size somehow...
+					
+					// Piece Message Received:
+					
+					// Handle Piece message:
+					int piece_index = p.readBuffer.getInt(5);
+					int piece_begin = p.readBuffer.getInt(9);
+					int piece_length = length - 9;
+					
+					byte[] block = new byte[100]; //this is wrong, need to get it from readBuffer
+					if (!storePiece(piece_index, piece_begin, piece_length, block)) {
+						return false;
+					}
+					p.blockRequest.bytesRead += piece_length;
+					if (p.blockRequest.bytesRead >= length) { //if done reading block
+						//actually, don't remove block, just mark as read so if hash doesn't verify, we can ask for pieces again
+						outstandingPieces.get(piece_index).removeBlock(p.blockRequest); //remove block from list
+						//now check if the block array for that piece is empty
+						//if so then validate SHA-1 hash for that piece, 
+					}
+					
+					
+					
+					// More
+					
+					// Perform state cleanup:
+					p.readBuffer.position(length + 4);
+					p.readBuffer.compact();
+					p.readBuffer.position(0);
+					
+					p.bytesLeft -= (length + 4);
+				}
+				else if(id == 8)
+				{
+					if(p.bytesLeft < 17)
+					{
+						cont = false;
+					}
+					else
+					{
+						// Cancel Message Received:
+						
+						// Handle Cancel message:
+						int cancel_index = p.readBuffer.getInt(5);
+						int cancel_begin = p.readBuffer.getInt(9);
+						int cancel_length = p.readBuffer.getInt(13);
+						
+						
+						// More
+						
+						// Perform state cleanup:
+						p.readBuffer.position(17);
+						p.readBuffer.compact();
+						p.readBuffer.position(0);
+						
+						p.bytesLeft -= 17;
+					}
+				}
+				else
+				{
+					// Unrecognized id, ignore the rest of length bytes
+					if(p.bytesLeft < 17)
+					{
+						cont = false;
+					}
+					else
+					{
+						p.readBuffer.position(length + 4);
+						p.readBuffer.compact();
+						p.readBuffer.position(0);
+						
+						p.bytesLeft -= (length + 4);
+					}
+				}
+			}
+		}
+		
+		if(p.bytesLeft >= 0)
+		{
+			p.readBuffer.position(p.bytesLeft);
+		}
+		
+		return true;
+	}
+	
+	public static byte[] getPiece(int index, int begin, int length) {
+		int fileOffset = (index * torrentFile.piece_length) + begin; 
+		byte [] byteArray = new byte[length];
+		try
+		{
+			destinationFile.read(byteArray, fileOffset, length);
+		}
+		catch(IOException e)
+		{
+			System.out.println("error occurred.");
+		}
+		return MessageLibrary.getPieceMessage(index, begin, length, byteArray);
+	}
+	
+	public static boolean storePiece(int piece_index, int piece_begin, int piece_length, byte [] block) {
+		int fileOffset = (piece_index * torrentFile.piece_length) + piece_begin; 
+		try
+		{
+			destinationFile.write(block, fileOffset, piece_length);
+		}
+		catch(IOException e)
+		{
+			System.out.println("error occurred.");
+			return false;
+		}
+		
+		return true;
+	}
+	
 }

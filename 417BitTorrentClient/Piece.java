@@ -14,4 +14,16 @@ public class Piece {
 		blocks.add(new BlockRequest(pieceNum, offset, length));
 	}
 	
+	public BlockRequest getBlock() {
+		return blocks.get(0);
+	}
+	
+	public void removeBlock(BlockRequest br) {
+		blocks.remove(br);
+	}
+	
+	public String toString() {
+		return "Piece: " + pieceNum + " blocks: " + blocks + "\n";
+	}
+	
 }
