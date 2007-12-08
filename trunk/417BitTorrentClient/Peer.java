@@ -40,16 +40,20 @@ public class Peer
 	
 	// State for transfers:
 	public boolean am_choking; //this client is choking the peer
-	public boolean shouldUnchoke; //this is for when a peer will be unchoked at the begining of the round
-	public boolean shouldChoke; //this is for when a peer will be choked at the begining of the round
+	public boolean shouldUnchoke; //this is for when a peer will be unchoked the next time it is writable
+	public boolean shouldChoke; //this is for when a peer will be choked the next time it is writable
 	public boolean am_interested; //this client is interested in the peer
+	public boolean shouldInterest; // this is for when a peer will be sent an interested message the next time it is writable
+	public boolean shouldUninterest; // this is for when a peer will be sent an uninterested message the next time it is writable
+	
 	public boolean peer_choking; //peer is choking this client
 	public boolean peer_interested; //peer is interested in this client
 	
 	public boolean handshake_sent; // this client sent a handshake to the peer
 	public boolean handshake_received; // this client received a handshake from the peer
 	
-	public List<BlockRequest> receivedRequests; // Pieces that this client is sending out (received requests)
+	public boolean sent_bitfield;
+	public List<BlockRequest> receiveRequests; // Pieces that this client is sending out (received requests)
 	public List<BlockRequest> sendRequests; // Requests that this client is sending out
 	public BlockRequest blockRequest = null; //the block that you have requested for this peer to send you.
 	// Status holders for what is being currently read
@@ -57,6 +61,8 @@ public class Peer
 	public int bytesLeft;
 	public int bytesReadThisRound;
 	
+	public ByteBuffer sendBuffer;
+	public int unsent;
 	
 	/**
 	 * @param info_hash 20-byte SHA1 hash of the info key in the metainfo file. This is the same info_hash that is transmitted in tracker requests.
@@ -75,8 +81,15 @@ public class Peer
 		this.handshake_sent = false;
 		this.shouldUnchoke = false;
 		this.shouldChoke = false;
+		this.receiveRequests = new ArrayList<BlockRequest>();
+		this.sendRequests = new ArrayList<BlockRequest>();
+		this.sent_bitfield = false;
+		
 		this.readBuffer = ByteBuffer.allocate(BYTES_TO_ALLOCATE);
 		this.bytesLeft = 0;
+		
+		this.sendBuffer = null;
+		this.unsent = 0;
 		
 		this.completedPieces = new BitSet();
 		
@@ -142,8 +155,160 @@ public class Peer
 	
 
 	
-	public void sendMessage(SocketChannel sc, BitSet alreadyRequested, BitSet completedPieces)
+	public boolean sendMessage(SocketChannel sc, BitSet completedPieces)
 	{
+		// Determine what it is that we need to send, if anything:
+		if(this.unsent > 0)
+		{
+			// We didn't finish sending everything last time, so send the rest (or as much as possible):
+			try
+			{
+				int sent = sc.write(this.sendBuffer);
+				this.unsent -= sent;
+			}
+			catch(IOException e)
+			{
+				return false;
+			}
+		}
+		else if(this.handshake_received)
+		{
+			// If we've gotten a handshake from them, we can do something:
+			
+			if(this.handshake_sent)
+			{
+				// If we've sent a handshake to them, we have completed the handshake
+				if(completedPieces.cardinality() != 0 && !this.sent_bitfield)
+				{
+					try
+					{
+						byte[] bytesToSend = MessageLibrary.getBitfieldMessage(BitTortoise.byteArrayFromBitSet(completedPieces, completedPieces.length()));
+						this.sendBuffer = ByteBuffer.wrap(bytesToSend);
+						int sent = sc.write(this.sendBuffer);
+						this.unsent = sent - bytesToSend.length;
+						
+						this.sent_bitfield = true;
+					}
+					catch(IOException e)
+					{
+						return false;
+					}
+				}
+				else if(this.shouldChoke || this.shouldUnchoke)
+				{
+					if(this.shouldChoke)
+					{
+						try
+						{
+							this.sendBuffer = ByteBuffer.wrap(MessageLibrary.choke);
+							int sent = sc.write(this.sendBuffer);
+							this.unsent = sent - MessageLibrary.choke.length;
+							
+							this.am_choking = true;
+						}
+						catch(IOException e)
+						{
+							return false;
+						}
+					}
+					else // if(this.shouldUnchoke)
+					{
+						try
+						{
+							this.sendBuffer = ByteBuffer.wrap(MessageLibrary.unchoke);
+							int sent = sc.write(this.sendBuffer);
+							this.unsent = sent - MessageLibrary.unchoke.length;
+							
+							this.am_choking = false;
+						}
+						catch(IOException e)
+						{
+							return false;
+						}
+					}
+				}
+				else if(this.shouldInterest || this.shouldUninterest)
+				{
+					if(this.shouldInterest)
+					{
+						try
+						{
+							this.sendBuffer = ByteBuffer.wrap(MessageLibrary.interested);
+							int sent = sc.write(this.sendBuffer);
+							this.unsent = sent - MessageLibrary.interested.length;
+							
+							this.am_interested = true;
+						}
+						catch(IOException e)
+						{
+							return false;
+						}
+					}
+					else // if(this.shouldUninterest)
+					{
+						try
+						{
+							this.sendBuffer = ByteBuffer.wrap(MessageLibrary.not_interested);
+							int sent = sc.write(this.sendBuffer);
+							this.unsent = sent - MessageLibrary.not_interested.length;
+							
+							this.am_interested = false;
+						}
+						catch(IOException e)
+						{
+							return false;
+						}
+					}
+				}
+				else
+				{
+					if(this.am_interested && !this.peer_choking)
+					{
+						// Send the next unsent request message:
+						for(BlockRequest br : this.sendRequests)
+						{
+							if(br.status == BlockRequest.UNREQUESTED)
+							{
+								try
+								{
+									byte[] bytesToSend = MessageLibrary.getRequestMessage(br.piece, br.offset, br.length);
+									this.sendBuffer = ByteBuffer.wrap(bytesToSend);
+									int sent = sc.write(this.sendBuffer);
+									this.unsent = sent - bytesToSend.length;
+									
+									br.status = BlockRequest.REQUESTED;
+								}
+								catch(IOException e)
+								{
+									return false;
+								}
+								
+								break;
+							}
+						}
+					}
+					else if(this.receiveRequests.size() != 0)
+					{
+						
+					}
+				}
+			}
+			else if(!this.handshake_sent)
+			{
+				// We have not yet sent them a handshake in response to their handshake, do so now:
+				try
+				{
+					this.sendBuffer = ByteBuffer.wrap(this.handshake);
+					int sent = sc.write(this.sendBuffer);
+					this.unsent = sent - this.handshake.length;
+				}
+				catch(IOException e)
+				{
+					return false;
+				}
+			}
+		}
 		
+		return true;
 	}
 }
