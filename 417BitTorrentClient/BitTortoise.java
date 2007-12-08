@@ -29,7 +29,6 @@ public class BitTortoise
 	private static Map<Integer, Piece> outstandingPieces = new HashMap<Integer, Piece>();
 	private static int block_length = 16384; //The reality is near all clients will now use 2^14 (16KB) requests. Due to clients that enforce that size, it is recommended that implementations make requests of that size. (TheoryOrg spec)
 	private static BitSet completedPieces; // Whether the Pieces/blocks of the file are completed or not
-	private static BitSet alreadyRequested; // Pieces that have been requested inside a peer.
 	
 	/**
 	 * Usage: "java bittortoise <torrent_file> [<destination_file> [port]]" 
@@ -186,7 +185,6 @@ public class BitTortoise
 		
 		
 		// Start the main loop of the client - choose and connect to peers, accept connections from peers, attempt to get all of the file
-		alreadyRequested = new BitSet();
 		numConnections = 0;
 		try
 		{
@@ -410,7 +408,7 @@ public class BitTortoise
 								if(activePeerMap.containsKey(sc))
 								{
 									Peer writablePeer = activePeerMap.get(sc);
-									writablePeer.sendMessage(sc, alreadyRequested, completedPieces);
+									writablePeer.sendMessage(sc, completedPieces);
 								}
 							}
 							else
@@ -726,10 +724,8 @@ public class BitTortoise
 					// loops and find the first open piece - This could be much better
 					for(int i=choices.nextSetBit(0); i>=0; i=choices.nextSetBit(i+1))
 					{
-						if(alreadyRequested.get(i) == false && completedPieces.get(i) == false)
+						if(completedPieces.get(i) == false)
 						{
-							alreadyRequested.set(i);
-							
 							for(BlockRequest br : outstandingPieces.get(i).blocks)
 							{
 								if(p.sendRequests.size() == MAX_OUTSTANDING_REQUESTS)
@@ -846,7 +842,7 @@ public class BitTortoise
 						// Queue this for sending at some point in the near future:
 						if(!p.am_choking)
 						{
-							p.receivedRequests.add(new BlockRequest(request_index,request_begin,request_length));
+							p.receiveRequests.add(new BlockRequest(request_index,request_begin,request_length));
 						}
 						
 						// Perform state cleanup:
@@ -899,7 +895,7 @@ public class BitTortoise
 						int cancel_length = p.readBuffer.getInt(13);
 						
 						// Remove the piece with the
-						Iterator<BlockRequest> it = p.receivedRequests.iterator();
+						Iterator<BlockRequest> it = p.receiveRequests.iterator();
 						while(it.hasNext())
 						{
 							BlockRequest br = it.next();
