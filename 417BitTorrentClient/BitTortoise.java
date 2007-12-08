@@ -22,6 +22,8 @@ import java.nio.channels.*;
 
 public class BitTortoise
 {
+	private static final int MAX_OUTSTANDING_REQUESTS = 5;
+	
 	private static TorrentFile torrentFile; // the object into which the .torrent file is b-decoded
 	private static RandomAccessFile destinationFile; // The file into which we are writing
 	private static Map<Integer, Piece> outstandingPieces = new HashMap<Integer, Piece>();
@@ -687,23 +689,26 @@ public class BitTortoise
 					p.peer_choking = false;
 					BitSet choices = p.completedPieces;
 					
-					/*loops and find the first open piece*/
-					for(int i=choices.nextSetBit(0); i>=0; i=choices.nextSetBit(i+1)) {
-						if(alreadyRequested.get(i) == false && completedPieces.get(i) == false){
+					// loops and find the first open piece - This could be much better
+					for(int i=choices.nextSetBit(0); i>=0; i=choices.nextSetBit(i+1))
+					{
+						if(alreadyRequested.get(i) == false && completedPieces.get(i) == false)
+						{
 							alreadyRequested.set(i);
-							byte[] message = MessageLibrary.getRequestMessage(
-									outstandingPieces.get(i).blocks.get(0).piece,
-									outstandingPieces.get(i).blocks.get(0).offset,
-									outstandingPieces.get(i).blocks.get(0).length); 
-							try {
-								socketChannel.write(ByteBuffer.wrap(message));
-							} catch (IOException e) {
-								System.out.println("Unable to write piece message to peer");
-								return false;
+							
+							for(BlockRequest br : outstandingPieces.get(i).blocks)
+							{
+								if(p.sendRequests.size() == MAX_OUTSTANDING_REQUESTS)
+									break;
+								if(br.status == BlockRequest.UNASSIGNED)
+								{
+									br.status = BlockRequest.UNREQUESTED;
+									p.sendRequests.add(br);
+								}
 							}
 							break;
 						}
-					} 
+					}
 					// Perform state cleanup:
 					p.readBuffer.position(5);
 					p.readBuffer.compact();
@@ -799,25 +804,15 @@ public class BitTortoise
 					{
 						// Request Message Received:
 						
-					
 						// Handle Request message:
 						int request_index = p.readBuffer.getInt(5);
 						int request_begin = p.readBuffer.getInt(9);
 						int request_length = p.readBuffer.getInt(13);
 						
-						//This sends out piece message right away,
-						//Soon, we should implement a request queue, and queue up a request until we feel like sending the piece
-						if (!p.am_choking) {
-							byte [] message = getPiece(request_index, request_begin, request_length);
-							p.outgoingRequests.add(message);
-							if (p.outgoingRequests.size() >= 5)
-							try {
-								
-								socketChannel.write(ByteBuffer.wrap(p.outgoingRequests.remove()));
-							} catch (Exception e) {
-								System.out.println("Unable to write piece message to peer");
-								return false;
-							}
+						// Queue this for sending at some point in the near future:
+						if(!p.am_choking)
+						{
+							p.receivedRequests.add(new BlockRequest(request_index,request_begin,request_length));
 						}
 						
 						// Perform state cleanup:
@@ -869,8 +864,16 @@ public class BitTortoise
 						int cancel_begin = p.readBuffer.getInt(9);
 						int cancel_length = p.readBuffer.getInt(13);
 						
-						
-						// More
+						// Remove the piece with the
+						Iterator<BlockRequest> it = p.receivedRequests.iterator();
+						while(it.hasNext())
+						{
+							BlockRequest br = it.next();
+							if(br.piece == cancel_index && br.offset == cancel_begin && br.length == cancel_length)
+							{
+								it.remove();
+							}
+						}
 						
 						// Perform state cleanup:
 						p.readBuffer.position(17);
@@ -883,7 +886,7 @@ public class BitTortoise
 				else
 				{
 					// Unrecognized id, ignore the rest of length bytes
-					if(p.bytesLeft < 17)
+					if(p.bytesLeft < length + 4)
 					{
 						cont = false;
 					}
@@ -916,7 +919,7 @@ public class BitTortoise
 		}
 		catch(IOException e)
 		{
-			System.out.println("error occurred.");
+			System.err.println("Error occurred while getting Piece " + index + ".");
 		}
 		return MessageLibrary.getPieceMessage(index, begin, length, byteArray);
 	}
@@ -929,7 +932,7 @@ public class BitTortoise
 		}
 		catch(IOException e)
 		{
-			System.out.println("error occurred.");
+			System.err.println("Error occurred while storing Piece " + piece_index + ".");
 			return false;
 		}
 		

@@ -1,7 +1,9 @@
 public class BlockRequest {
-	public static final int EMPTY = 0;
-	public static final int STARTED = 1;
-	public static final int FINISHED = 2;
+	public static final int UNASSIGNED = -2; // Incoming Block: we have not yet assigned this request to a peer.  Outgoing Block: unused.
+	public static final int UNREQUESTED = -1; // Incoming Block: we have not yet requested this piece yet.  Outgoing Block: This request has been received, but not responded to yet.
+	public static final int REQUESTED = 0; // Incoming Block: we have requested, but not received any of it.
+	public static final int STARTED = 1; // Incoming Block: we have started receiving it.  Outgoing: unused.
+	public static final int FINISHED = 2; // Incoming Block: we have finished receiving it.  Outgoing: unused.
 	int piece;
 	int offset;
 	int length;
@@ -13,7 +15,7 @@ public class BlockRequest {
 		this.offset = offset;
 		this.length = length;
 		bytesRead = 0;
-		status = EMPTY;
+		status = UNASSIGNED;
 	}
 	
 	public String toString() {
