@@ -673,6 +673,29 @@ public class BitTortoise
 					// Handle un-choke message:
 					p.peer_choking = false;
 					
+<<<<<<< .mine
+					BitSet choices = p.completedPieces;
+					
+					/*loops and find the first open piece*/
+					for(int i=choices.nextSetBit(0); i>=0; i=choices.nextSetBit(i+1)) {
+						if(alreadyRequested.get(i) == false && completedPieces.get(i) == false){
+							alreadyRequested.set(i);
+							byte[] message = MessageLibrary.getRequestMessage(
+									outstandingPieces.get(i).blocks.get(0).piece,
+									outstandingPieces.get(i).blocks.get(0).offset,
+									outstandingPieces.get(i).blocks.get(0).length); 
+							try {
+								socketChannel.write(ByteBuffer.wrap(message));
+							} catch (IOException e) {
+								System.out.println("Unable to write piece message to peer");
+								return false;
+							}
+							break;
+						}
+					} 
+					
+=======
+>>>>>>> .r63
 					// Perform state cleanup:
 					p.readBuffer.position(5);
 					p.readBuffer.compact();
