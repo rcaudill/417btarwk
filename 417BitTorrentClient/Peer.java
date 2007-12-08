@@ -40,6 +40,8 @@ public class Peer
 	
 	// State for transfers:
 	public boolean am_choking; //this client is choking the peer
+	public boolean shouldUnchoke; //this is for when a peer will be unchoked at the begining of the round
+	public boolean shouldChoke; //this is for when a peer will be choked at the begining of the round
 	public boolean am_interested; //this client is interested in the peer
 	public boolean peer_choking; //peer is choking this client
 	public boolean peer_interested; //peer is interested in this client
@@ -71,7 +73,8 @@ public class Peer
 		this.peer_interested = false;
 		this.handshake_received = false;
 		this.handshake_sent = false;
-		
+		this.shouldUnchoke = false;
+		this.shouldChoke = false;
 		this.readBuffer = ByteBuffer.allocate(BYTES_TO_ALLOCATE);
 		this.bytesLeft = 0;
 		
