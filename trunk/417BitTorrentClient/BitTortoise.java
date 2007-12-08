@@ -18,12 +18,13 @@ import java.util.*;
 import java.nio.*;
 import java.nio.channels.*;
 
+
+
 public class BitTortoise
 {
-	
 	private static TorrentFile torrentFile; // the object into which the .torrent file is b-decoded
 	private static RandomAccessFile destinationFile; // The file into which we are writing
-	private static ArrayList<Piece> outstandingPieces = new ArrayList<Piece>();
+	private static Map<Integer, Piece> outstandingPieces = new HashMap<Integer, Piece>();
 	private static int block_length = 16384; //The reality is near all clients will now use 2^14 (16KB) requests. Due to clients that enforce that size, it is recommended that implementations make requests of that size. (TheoryOrg spec)
 	
 	
@@ -92,23 +93,13 @@ public class BitTortoise
 		totalPieceCount = ((int)torrentFile.file_length/torrentFile.piece_length) + 1;
 		completedPieces = new BitSet(totalPieceCount);
 		
-		System.out.println("file length is " + torrentFile.file_length);
-		System.out.println("Piece length is " + torrentFile.piece_length);
+		/* initialize all block requests for transfer */
 		for (int i=0; i < totalPieceCount; i++) {
-			outstandingPieces.add(new Piece(i));
+			outstandingPieces.put(new Integer(i), new Piece(i));
 			for (int j=0; j < torrentFile.piece_length / block_length; j++) {
 				outstandingPieces.get(i).addBlock(j * block_length, block_length);
 			}
 		}
-		
-		Peer myPeer = new Peer(torrentFile.info_hash_as_binary, new byte [50], my_peer_id, "a", 3);
-		byte [] b = myPeer.sendPiece(outstandingPieces.get(0).getBlock(), torrentFile);
-		myPeer.storePiece(outstandingPieces.get(0).getBlock(), b, torrentFile);
-		for (int i=0; i<1000; i++) {
-		System.out.println(b[i]);
-		}
-		//System.out.println(outstandingPieces); 
-		System.exit(0);
 		
 		// Extract a list of peers, and other information from the tracker:
 		peerList = new LinkedList<Peer>(); // List of peer objects (uses Generics)
@@ -190,23 +181,6 @@ public class BitTortoise
 
 		}*/
 		
-		/*
-		// Code Sample for writing to a certain area of a file:
-		try
-		{
-			RandomAccessFile raf = new RandomAccessFile("tempTestFile.txt","rw");
-			byte arr[] = new byte[1024];
-			for(int i = 0; i < 1024; i++)
-				arr[i] = 0x66;
-			raf.setLength(1024);
-			raf.seek(1022);
-			raf.write(arr, 1022, 2);
-		}
-		catch(IOException e)
-		{
-			System.out.println("error occurred.");
-		}
-		*/
 		
 		// Start the main loop of the client - choose and connect to peers, accept connections from peers, attempt to get all of the file
 		alreadyRequested = new BitSet();
@@ -605,6 +579,11 @@ public class BitTortoise
 				return false;
 			}
 		}
+		
+		if (p.blockRequest != null && p.blockRequest.status == BlockRequest.STARTED) {
+			
+		}
+		
 		if(!p.handshake_received )
 		{
 			if(p.bytesLeft >= 68 && BitTortoise.isHandshakeMessage(p.readBuffer))
@@ -773,19 +752,27 @@ public class BitTortoise
 					{
 						// Request Message Received:
 						
+					
 						// Handle Request message:
 						int request_index = p.readBuffer.getInt(5);
 						int request_begin = p.readBuffer.getInt(9);
 						int request_length = p.readBuffer.getInt(13);
 						
-						
-						byte [] message = getPiece(request_index, request_begin, request_length);
-						try {
-							socketChannel.write(ByteBuffer.wrap(message));
-						} catch (Exception e) {
-							System.out.println("Unable to write piece message to peer");
-							return false;
+						//This sends out piece message right away,
+						//Soon, we should implement a request queue, and queue up a request until we feel like sending the piece
+						if (!p.am_choking) {
+							byte [] message = getPiece(request_index, request_begin, request_length);
+							p.outgoingRequests.add(message);
+							if (p.outgoingRequests.size() >= 5)
+							try {
+								
+								socketChannel.write(ByteBuffer.wrap(p.outgoingRequests.remove()));
+							} catch (Exception e) {
+								System.out.println("Unable to write piece message to peer");
+								return false;
+							}
 						}
+						
 						// Perform state cleanup:
 						p.readBuffer.position(17);
 						p.readBuffer.compact();
@@ -802,25 +789,13 @@ public class BitTortoise
 					
 					// Handle Piece message:
 					int piece_index = p.readBuffer.getInt(5);
-					int piece_begin = p.readBuffer.getInt(9);
-					int piece_length = length - 9;
+					int block_begin = p.readBuffer.getInt(9);
+					int block_length = length - 9;
 					
-					byte[] block = new byte[100]; //this is wrong, need to get it from readBuffer
-					if (!storePiece(piece_index, piece_begin, piece_length, block)) {
-						return false;
-					}
-					p.blockRequest.bytesRead += piece_length;
-					if (p.blockRequest.bytesRead >= length) { //if done reading block
-						//actually, don't remove block, just mark as read so if hash doesn't verify, we can ask for pieces again
-						outstandingPieces.get(piece_index).removeBlock(p.blockRequest); //remove block from list
-						//now check if the block array for that piece is empty
-						//if so then validate SHA-1 hash for that piece,
-						//call: SHA1Functions.getSha1Hash(byte[] pieceBytes) to get the hash
-					}
-					
-					
-					
-					// More
+					//convert bytebuffer into byte array and store it in 
+					byte [] block = new byte[p.bytesLeft - 13];
+					p.readBuffer.get(block, 10, p.bytesLeft - 13);
+					processPieceMessage(p, piece_index, block_begin, block_length, block);
 					
 					// Perform state cleanup:
 					p.readBuffer.position(length + 4);
@@ -896,8 +871,8 @@ public class BitTortoise
 		return MessageLibrary.getPieceMessage(index, begin, length, byteArray);
 	}
 	
-	public static boolean storePiece(int piece_index, int piece_begin, int piece_length, byte [] block) {
-		int fileOffset = (piece_index * torrentFile.piece_length) + piece_begin; 
+	public static boolean storePiece(Peer p, int piece_index, int piece_begin, int piece_length, byte [] block) {
+		int fileOffset = (piece_index * torrentFile.piece_length) + piece_begin + p.blockRequest.bytesRead; 
 		try
 		{
 			destinationFile.write(block, fileOffset, piece_length);
@@ -911,4 +886,38 @@ public class BitTortoise
 		return true;
 	}
 	
+	public static boolean processPieceMessage(Peer p, int piece_index, int block_begin, int block_length, byte[] block) {
+		p.blockRequest = outstandingPieces.get(piece_index).getBlock(block_begin);
+		p.blockRequest.status = BlockRequest.STARTED;
+		if (!storePiece(p, piece_index, block_begin, block_length, block)) {
+			return false;
+		}
+		p.blockRequest.bytesRead += block.length;
+		if (p.blockRequest.bytesRead >= p.blockRequest.length) { //if done reading block
+			p.blockRequest.status = BlockRequest.FINISHED;
+			p.blockRequest = null;
+			if (outstandingPieces.get(piece_index).allFinished()) {
+				byte [] entirePiece = new byte [torrentFile.piece_length]; //this is a HUGE array, is there a better way to do this?
+				byte [] mySHA1;
+				try {
+					destinationFile.read(entirePiece, piece_index * torrentFile.piece_length, torrentFile.piece_length);
+				} catch (Exception e) {
+					System.out.println("error reading in entire piece");
+					System.exit(1);
+				}
+				mySHA1 = SHA1Functions.getSha1Hash(entirePiece);
+				if (mySHA1.equals(torrentFile.piece_hash_values_as_binary.get(piece_index))) {
+					outstandingPieces.remove(piece_index);
+					//update bitset
+					if (outstandingPieces.isEmpty()) {
+						System.out.println("received entire file... do something");
+					}
+				}
+				else {
+					//reset all blocks to empty and bytesread to 0
+				}
+			}
+		}
+		return true;
+	}
 }

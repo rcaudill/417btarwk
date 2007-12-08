@@ -14,12 +14,26 @@ public class Piece {
 		blocks.add(new BlockRequest(pieceNum, offset, length));
 	}
 	
-	public BlockRequest getBlock() {
-		return blocks.get(0);
+	public BlockRequest getBlock(int offset) {
+		for (int i=0; i < blocks.size(); i++) {
+			if (blocks.get(i).offset == offset) {
+				return blocks.get(i);
+			}
+		}
+		return null;
 	}
 	
 	public void removeBlock(BlockRequest br) {
 		blocks.remove(br);
+	}
+	
+	public boolean allFinished() {
+		for (int i=0; i<blocks.size(); i++) {
+			if (blocks.get(i).status != BlockRequest.FINISHED) {
+				return false;
+			}
+		}
+		return true;
 	}
 	
 	public String toString() {

@@ -47,6 +47,7 @@ public class Peer
 	public boolean handshake_sent; // this client sent a handshake to the peer
 	public boolean handshake_received; // this client received a handshake from the peer
 	
+	public Queue<byte[]> outgoingRequests;
 	public BlockRequest blockRequest = null; //the block that you have requested for this peer to send you.
 	// Status holders for what is being currently read
 	public ByteBuffer readBuffer;
@@ -134,36 +135,7 @@ public class Peer
 		
 	}
 	
-	public byte[] sendPiece(BlockRequest br, TorrentFile torrentFile) {
-		int fileOffset = (br.piece * torrentFile.piece_length) + br.offset; 
-		byte [] b = new byte[1000];
-		try
-		{
-			RandomAccessFile raf = new RandomAccessFile("test.jpg","rw");
-			raf.read(b, fileOffset, 1000);
-			raf.close();
-		}
-		catch(IOException e)
-		{
-			System.out.println("error occurred.");
-		}
-		return b;
-	}
-	
-	public int storePiece(BlockRequest br, byte[] bArr, TorrentFile torrentFile) {
-		int fileOffset = (br.piece * torrentFile.piece_length) + br.offset; 
-		try
-		{
-			RandomAccessFile raf = new RandomAccessFile("myfile.jpg","rw");
-			raf.write(bArr, fileOffset, 1000);
-		}
-		catch(IOException e)
-		{
-			System.out.println("error occurred.");
-		}
-		
-		return 0;
-	}
+
 	
 	public void sendMessage(SocketChannel sc, BitSet alreadyRequested, BitSet completedPieces)
 	{
