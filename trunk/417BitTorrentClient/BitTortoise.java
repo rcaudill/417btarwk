@@ -814,7 +814,8 @@ public class BitTortoise
 						//actually, don't remove block, just mark as read so if hash doesn't verify, we can ask for pieces again
 						outstandingPieces.get(piece_index).removeBlock(p.blockRequest); //remove block from list
 						//now check if the block array for that piece is empty
-						//if so then validate SHA-1 hash for that piece, 
+						//if so then validate SHA-1 hash for that piece,
+						//call: SHA1Functions.getSha1Hash(byte[] pieceBytes) to get the hash
 					}
 					
 					
