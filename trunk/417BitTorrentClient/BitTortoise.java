@@ -49,6 +49,8 @@ public class BitTortoise
 		int incomplete; // number of leechers/peers providing 0+ parts of the file (but are not seeders)
 		byte[] my_peer_id = new byte[20]; // the peer id that this client is using
 		Tracker tracker = null;
+		Date start;
+		Date finish;
 		
 		// State variables:
 		int totalPieceCount = 0;
@@ -202,8 +204,40 @@ public class BitTortoise
 			serverChannel.register(select, SelectionKey.OP_ACCEPT);
 			
 			// Main Data processing loop:
+			start = new Date();
 			while(true)
 			{
+				finish = new Date();
+				float elapsedTimeSec = (finish.getTime() - start.getTime())/1000F;
+			    /*if ten seconds has past, reorder the top peers get a new one to opt unchoke.*/
+			    if(elapsedTimeSec % 10 == 0){
+			    	ArrayList<Peer> possiblePeers = new ArrayList<Peer>();
+			    	for(Map.Entry<SocketChannel, Peer> e : activePeerMap.entrySet()){
+			    		if(e.getValue() != null){
+			    			possiblePeers.add(e.getValue());
+			    		}
+			    	}
+			    	
+			    	/*sorts it based on bytesReadThisRound*/
+			    	Collections.sort(possiblePeers, new topThreeComparator());
+			    	possiblePeers.get(0).shouldUnchoke=true;
+			    	possiblePeers.get(1).shouldUnchoke=true;
+			    	possiblePeers.get(2).shouldUnchoke=true;
+			    	
+			    	/*get one to randomly unchoke*/
+			    	int optimisticUnchokeIndex = (int)((Math.random() * possiblePeers.size()) + 3); 
+			    	possiblePeers.get(optimisticUnchokeIndex).shouldUnchoke=true;
+			    	
+			    	/*go through and set the peers as choked if they aren't already*/
+			    	for(int j=0;j<possiblePeers.size();j++){
+			    		if(possiblePeers.get(j).am_choking == false &&
+			    				possiblePeers.get(j).shouldUnchoke == false){
+			    			possiblePeers.get(j).shouldChoke = true;
+			    		}
+			    	}
+			    	start = new Date();
+			    }
+			    
 				int num = select.selectNow();
 				
 				if(num > 0)
@@ -808,7 +842,7 @@ public class BitTortoise
 						int request_index = p.readBuffer.getInt(5);
 						int request_begin = p.readBuffer.getInt(9);
 						int request_length = p.readBuffer.getInt(13);
-						
+
 						// Queue this for sending at some point in the near future:
 						if(!p.am_choking)
 						{
