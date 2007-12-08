@@ -46,6 +46,7 @@ public class Tracker {
 	 */
 	public void connect(HttpURLConnection sentTrackerURL, byte[] sentPeerid){
 		connect = sentTrackerURL;
+		
 		this.peerid = sentPeerid;
 		try {
 			connect.setRequestMethod("GET");
