@@ -26,7 +26,8 @@ public class BitTortoise
 	private static RandomAccessFile destinationFile; // The file into which we are writing
 	private static Map<Integer, Piece> outstandingPieces = new HashMap<Integer, Piece>();
 	private static int block_length = 16384; //The reality is near all clients will now use 2^14 (16KB) requests. Due to clients that enforce that size, it is recommended that implementations make requests of that size. (TheoryOrg spec)
-	
+	private static BitSet completedPieces; // Whether the Pieces/blocks of the file are completed or not
+	private static BitSet alreadyRequested; // Pieces that have been requested inside a peer.
 	
 	/**
 	 * Usage: "java bittortoise <torrent_file> [<destination_file> [port]]" 
@@ -48,8 +49,6 @@ public class BitTortoise
 		Tracker tracker = null;
 		
 		// State variables:
-		BitSet completedPieces; // Whether the Pieces/blocks of the file are completed or not
-		BitSet alreadyRequested; // Pieces that have been requested inside a peer.
 		int totalPieceCount = 0;
 		Map<SocketChannel, Peer> activePeerMap = new HashMap<SocketChannel, Peer>();
 		Map<SocketChannel, Peer> pendingPeerMap = new HashMap<SocketChannel, Peer>();
@@ -448,8 +447,22 @@ public class BitTortoise
 				}
 				else if(numConnections < 30)
 				{
-					tracker.connect();
-					peerList = tracker.peerList;
+					HttpURLConnection tempConnection = (HttpURLConnection)(new URL(torrentFile.tracker_url + "?" +
+							"info_hash=" + torrentFile.info_hash_as_url + "&" +
+							"downloaded=0" + "&" +
+							"uploaded=0" + "&" +
+							"left=" + torrentFile.file_length + "&" +
+							"peer_id=" + TorrentFileHandler.byteArrayToURLString(my_peer_id) + "&" +
+							"port=" + port).openConnection());
+					
+					tracker.connect(tempConnection,my_peer_id);
+					
+					/*only add new peers to the list*/
+					for(int i=0;i<tracker.peerList.size();i++){
+						if(!peerList.contains(tracker.peerList.get(i))){
+							peerList.add(tracker.peerList.get(i));
+						}
+					}
 				}
 			}
 		}
@@ -672,8 +685,6 @@ public class BitTortoise
 					
 					// Handle un-choke message:
 					p.peer_choking = false;
-					
-<<<<<<< .mine
 					BitSet choices = p.completedPieces;
 					
 					/*loops and find the first open piece*/
@@ -693,9 +704,6 @@ public class BitTortoise
 							break;
 						}
 					} 
-					
-=======
->>>>>>> .r63
 					// Perform state cleanup:
 					p.readBuffer.position(5);
 					p.readBuffer.compact();
