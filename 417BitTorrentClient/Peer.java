@@ -52,6 +52,7 @@ public class Peer
 	// Status holders for what is being currently read
 	public ByteBuffer readBuffer;
 	public int bytesLeft;
+	public int bytesReadThisRound;
 	
 	
 	/**
