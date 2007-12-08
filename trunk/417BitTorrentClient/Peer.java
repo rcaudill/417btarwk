@@ -47,7 +47,8 @@ public class Peer
 	public boolean handshake_sent; // this client sent a handshake to the peer
 	public boolean handshake_received; // this client received a handshake from the peer
 	
-	public Queue<byte[]> outgoingRequests;
+	public List<BlockRequest> receivedRequests; // Pieces that this client is sending out (received requests)
+	public List<BlockRequest> sendRequests; // Requests that this client is sending out
 	public BlockRequest blockRequest = null; //the block that you have requested for this peer to send you.
 	// Status holders for what is being currently read
 	public ByteBuffer readBuffer;
@@ -86,7 +87,7 @@ public class Peer
 		}
 		catch(Exception e)
 		{
-			System.out.println("Failed to initialze peer. Check for variable size overflow");
+			System.err.println("Failed to initialze peer. Check for variable size overflow");
 			System.exit(1);
 		}
 		
@@ -103,7 +104,7 @@ public class Peer
 		}
 		catch(Exception e)
 		{
-			System.out.println("Failed to create peer handshake.");
+			System.err.println("Failed to create peer handshake.");
 			System.exit(1);
 		}
 	}
