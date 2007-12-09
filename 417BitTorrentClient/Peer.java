@@ -18,7 +18,7 @@ import java.util.*;
  *
  * handshake: The handshake is a required message and must be the first message transmitted by the client. It is (49+len(pstr)) bytes long. handshake: <pstrlen><pstr><reserved><info_hash><peer_id> 
  */
-public class Peer 
+public class Peer
 {
 	// Constants:
 	private final int BYTES_TO_ALLOCATE = 1024;
@@ -56,6 +56,9 @@ public class Peer
 	public List<BlockRequest> receiveRequests; // Pieces that this client is sending out (received requests)
 	public List<BlockRequest> sendRequests; // Requests that this client is sending out
 	public BlockRequest blockRequest = null; //the block that you have requested for this peer to send you.
+	public BlockRequest shouldCancel; // The block that we (this client) wish to cancel the next time we hit a sendMessage.  Remove this from the sendRequests before setting this!
+	
+	public long lastMessageSentTime;
 	// Status holders for what is being currently read
 	public ByteBuffer readBuffer;
 	public int bytesLeft;
@@ -63,6 +66,8 @@ public class Peer
 	
 	public ByteBuffer sendBuffer;
 	public int unsent;
+	
+	public BitSet advertisedPieces; // Pieces that we (this client) have advertised to other peers
 	
 	/**
 	 * @param info_hash 20-byte SHA1 hash of the info key in the metainfo file. This is the same info_hash that is transmitted in tracker requests.
@@ -84,6 +89,7 @@ public class Peer
 		this.receiveRequests = new ArrayList<BlockRequest>();
 		this.sendRequests = new ArrayList<BlockRequest>();
 		this.sent_bitfield = false;
+		this.shouldCancel = null;
 		
 		this.readBuffer = ByteBuffer.allocate(BYTES_TO_ALLOCATE);
 		this.bytesLeft = 0;
@@ -148,13 +154,13 @@ public class Peer
 		return false;
 	}
 	
-	
-	public void requestMessage() {
-		
-	}
-	
-
-	
+	/**
+	 * Sends a message to this peer, if one is in need of being sent.
+	 * 
+	 * @param sc the SocketChannel on which we should send a message
+	 * @param completedPieces the pieces that we have already completed
+	 * @return whether there were any IOExceptions thrown that mean we should stop communicating with this peer
+	 */
 	public boolean sendMessage(SocketChannel sc, BitSet completedPieces)
 	{
 		// Determine what it is that we need to send, if anything:
@@ -165,6 +171,8 @@ public class Peer
 			{
 				int sent = sc.write(this.sendBuffer);
 				this.unsent -= sent;
+				
+				lastMessageSentTime = (new Date()).getTime();
 			}
 			catch(IOException e)
 			{
@@ -178,16 +186,18 @@ public class Peer
 			if(this.handshake_sent)
 			{
 				// If we've sent a handshake to them, we have completed the handshake
-				if(completedPieces.cardinality() != 0 && !this.sent_bitfield)
+				if(completedPieces.isEmpty() && !this.sent_bitfield)
 				{
 					try
 					{
 						byte[] bytesToSend = MessageLibrary.getBitfieldMessage(BitTortoise.byteArrayFromBitSet(completedPieces, completedPieces.length()));
 						this.sendBuffer = ByteBuffer.wrap(bytesToSend);
 						int sent = sc.write(this.sendBuffer);
-						this.unsent = sent - bytesToSend.length;
+						this.unsent = bytesToSend.length - sent;
 						
 						this.sent_bitfield = true;
+						
+						lastMessageSentTime = (new Date()).getTime();
 					}
 					catch(IOException e)
 					{
@@ -202,9 +212,11 @@ public class Peer
 						{
 							this.sendBuffer = ByteBuffer.wrap(MessageLibrary.choke);
 							int sent = sc.write(this.sendBuffer);
-							this.unsent = sent - MessageLibrary.choke.length;
+							this.unsent = MessageLibrary.choke.length - sent;
 							
 							this.am_choking = true;
+							
+							lastMessageSentTime = (new Date()).getTime();
 						}
 						catch(IOException e)
 						{
@@ -217,9 +229,11 @@ public class Peer
 						{
 							this.sendBuffer = ByteBuffer.wrap(MessageLibrary.unchoke);
 							int sent = sc.write(this.sendBuffer);
-							this.unsent = sent - MessageLibrary.unchoke.length;
+							this.unsent = MessageLibrary.unchoke.length - sent;
 							
 							this.am_choking = false;
+							
+							lastMessageSentTime = (new Date()).getTime();
 						}
 						catch(IOException e)
 						{
@@ -235,9 +249,11 @@ public class Peer
 						{
 							this.sendBuffer = ByteBuffer.wrap(MessageLibrary.interested);
 							int sent = sc.write(this.sendBuffer);
-							this.unsent = sent - MessageLibrary.interested.length;
+							this.unsent = MessageLibrary.interested.length - sent;
 							
 							this.am_interested = true;
+							
+							lastMessageSentTime = (new Date()).getTime();
 						}
 						catch(IOException e)
 						{
@@ -250,14 +266,35 @@ public class Peer
 						{
 							this.sendBuffer = ByteBuffer.wrap(MessageLibrary.not_interested);
 							int sent = sc.write(this.sendBuffer);
-							this.unsent = sent - MessageLibrary.not_interested.length;
+							this.unsent = MessageLibrary.not_interested.length - sent;
 							
 							this.am_interested = false;
+							
+							lastMessageSentTime = (new Date()).getTime();
 						}
 						catch(IOException e)
 						{
 							return false;
 						}
+					}
+				}
+				else if(this.shouldCancel != null)
+				{
+					// Send a cancel message
+					try
+					{
+						byte[] bytesToSend = MessageLibrary.getCancelMessage(this.shouldCancel.piece, this.shouldCancel.offset, this.shouldCancel.length);
+						this.sendBuffer = ByteBuffer.wrap(bytesToSend);
+						int sent = sc.write(this.sendBuffer);
+						this.unsent = bytesToSend.length - sent;
+						
+						this.shouldCancel = null;
+						
+						lastMessageSentTime = (new Date()).getTime();
+					}
+					catch(IOException e)
+					{
+						return false;
 					}
 				}
 				else
@@ -274,22 +311,92 @@ public class Peer
 									byte[] bytesToSend = MessageLibrary.getRequestMessage(br.piece, br.offset, br.length);
 									this.sendBuffer = ByteBuffer.wrap(bytesToSend);
 									int sent = sc.write(this.sendBuffer);
-									this.unsent = sent - bytesToSend.length;
+									this.unsent = bytesToSend.length - sent;
 									
 									br.status = BlockRequest.REQUESTED;
+									
+									lastMessageSentTime = (new Date()).getTime();
 								}
 								catch(IOException e)
 								{
 									return false;
 								}
 								
-								break;
+								return true;
 							}
 						}
 					}
-					else if(this.receiveRequests.size() != 0)
+					else if(!this.am_choking && this.receiveRequests.size() != 0)
 					{
+						// Respond to a request for data with a Piece message
+						try
+						{
+							BlockRequest br = this.receiveRequests.remove(0);
+							byte[] bytesToSend = BitTortoise.getPiece(br.piece, br.offset, br.length);
+							this.sendBuffer = ByteBuffer.wrap(bytesToSend);
+							int sent = sc.write(this.sendBuffer);
+							this.unsent = bytesToSend.length - sent;
+							
+							lastMessageSentTime = (new Date()).getTime();
+						}
+						catch(IOException e)
+						{
+							return false;
+						}
+					}
+					else
+					{
+						// Advertise new blocks that we have gotten
+						BitSet newPiecesToAdvertise = (BitSet)completedPieces.clone();
+						newPiecesToAdvertise.andNot(this.advertisedPieces);
+						if(!newPiecesToAdvertise.isEmpty())
+						{
+							// Advertise ones that they haven't reported having first:
+							BitSet theyDontHave = (BitSet)newPiecesToAdvertise.clone();
+							theyDontHave.andNot(this.completedPieces);
+							if(!theyDontHave.isEmpty())
+								newPiecesToAdvertise = theyDontHave;
+							
+							// Pick a random one from newPiecesToAdvertise to send in a have message
+							int toSend = -1;
+							while(toSend == -1)
+								toSend = newPiecesToAdvertise.nextSetBit((int)(Math.random()*newPiecesToAdvertise.length()));
+							try
+							{
+								byte[] bytesToSend = MessageLibrary.getHaveMessage(toSend);
+								this.sendBuffer = ByteBuffer.wrap(bytesToSend);
+								int sent = sc.write(this.sendBuffer);
+								this.unsent = bytesToSend.length - sent;
+								
+								this.advertisedPieces.set(toSend);
+								
+								lastMessageSentTime = (new Date()).getTime();
+							}
+							catch(IOException e)
+							{
+								return false;
+							}
+							
+							return true;
+						}
 						
+						long now = (new Date()).getTime();
+						if(now - lastMessageSentTime >= 2 * 60000) // if it has been 2 minutes, send a keep_alive message
+						{
+							// Otherwise, if there has been enough time since the last time a message was sent, send a keep-alive message
+							try
+							{
+								this.sendBuffer = ByteBuffer.wrap(MessageLibrary.keep_alive);
+								int sent = sc.write(this.sendBuffer);
+								this.unsent = MessageLibrary.keep_alive.length - sent;
+								
+								lastMessageSentTime = (new Date()).getTime();
+							}
+							catch(IOException e)
+							{
+								return false;
+							}
+						}
 					}
 				}
 			}
@@ -300,7 +407,9 @@ public class Peer
 				{
 					this.sendBuffer = ByteBuffer.wrap(this.handshake);
 					int sent = sc.write(this.sendBuffer);
-					this.unsent = sent - this.handshake.length;
+					this.unsent = this.handshake.length - sent;
+					
+					lastMessageSentTime = (new Date()).getTime();
 				}
 				catch(IOException e)
 				{
