@@ -71,21 +71,42 @@ public class BitTortoise
 			my_peer_id[i] = (byte)((Math.random() * 0x5F) + 0x20); // make sure these are printable characters (range from 0x20 to 0x7E)
 		
 		// Verify that the correct argument(s) were used:
-		if(args.length < 1 || args.length > 3)
+		if(args.length < 1 || args.length > 4)
 		{
-			System.err.println("Usage: java bittortoise <torrent_file> [<destination_file> [port]] [-v]");
+			System.err.println("Usage: java bittortoise <torrent_file> [-d <destination_file>] [-p <port>] [-v]");
 			System.exit(1);
 		}
 		port = 6881; // default port is 6881
 		if(args.length == 3)
 			port = Integer.parseInt(args[2]);
 		
+		String destinationFileName = null;
+		
+		boolean destinationFileIsNext = false;
+		boolean portIsNext = false;
 		for(String arg : args)
 		{
-			if(arg.equals("-v"))
+			if(arg.startsWith("-"))
 			{
-				verbose = true;
-				break;
+				if(arg.indexOf('v') != -1)
+					verbose = true;
+				if(arg.indexOf('p') != -1)
+					portIsNext = true;
+				if(arg.indexOf('d') != -1)
+					destinationFileIsNext = true;
+			}
+			else
+			{
+				if(portIsNext)
+				{
+					port = Integer.parseInt(arg);
+					portIsNext = false;
+				}
+				else if(destinationFileIsNext)
+				{
+					destinationFileName = arg;
+					destinationFileIsNext = false;
+				}
 			}
 		}
 		
@@ -154,10 +175,10 @@ public class BitTortoise
 		// Create the destination file:
 		try
 		{
-			if(args.length > 1)
+			if(destinationFileName != null)
 			{
 				// If we were given a file name, use it:
-				destinationFile = new RandomAccessFile(args[1], "rw");
+				destinationFile = new RandomAccessFile(destinationFileName, "rw");
 			}
 			else
 			{
@@ -1135,7 +1156,8 @@ public class BitTortoise
 		int fileOffset = (piece_index * torrentFile.piece_length) + piece_begin + p.blockRequest.bytesRead; 
 		try
 		{
-			destinationFile.write(block, fileOffset, piece_length);
+			destinationFile.seek(fileOffset);
+			destinationFile.write(block, 0, piece_length);
 		}
 		catch(IOException e)
 		{
