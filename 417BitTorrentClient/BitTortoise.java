@@ -247,10 +247,10 @@ public class BitTortoise
 			while(true)
 			{
 				finish = new Date();
-				float elapsedTimeSec = (finish.getTime() - start.getTime())/1000F;
+				long elapsedTimeMS = finish.getTime() - start.getTime();
 				// if ten seconds has past, reorder the top peers get a new one
 				// to opt unchoke.
-				if (elapsedTimeSec % 10 == 0)
+				if ((elapsedTimeMS % (10*1000)) == 0)
 				{
 					ArrayList<Peer> possiblePeers = new ArrayList<Peer>();
 					for(Map.Entry<SocketChannel, Peer> e : activePeerMap.entrySet())
@@ -315,6 +315,16 @@ public class BitTortoise
 							p.shouldChoke = true;
 						}
 						else
+						{
+							p.shouldChoke = false;
+						}
+						
+						if(p.am_choking == true && p.shouldUnchoke == true)
+						{
+							p.shouldUnchoke = false;
+						}
+						
+						if(p.am_choking == false  && p.shouldChoke == true)
 						{
 							p.shouldChoke = false;
 						}
@@ -1174,7 +1184,7 @@ public class BitTortoise
 		try
 		{
 			destinationFile.seek(fileOffset);
-			destinationFile.write(block, 0, piece_length);
+			destinationFile.write(block, 0, block.length);
 		}
 		catch(IOException e)
 		{
