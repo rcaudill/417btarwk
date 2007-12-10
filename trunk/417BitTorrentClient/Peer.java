@@ -251,9 +251,9 @@ public class Peer
 						return false;
 					}
 				}
-				else if((!this.am_choking && this.shouldChoke) || (this.am_choking && this.shouldUnchoke))
+				else if((this.shouldChoke) || (this.shouldUnchoke))
 				{
-					if(this.shouldChoke)
+					if(!this.am_choking && this.shouldChoke)
 					{
 						try
 						{
@@ -273,7 +273,7 @@ public class Peer
 							return false;
 						}
 					}
-					else // if(this.shouldUnchoke)
+					else if(this.am_choking && this.shouldUnchoke)
 					{
 						try
 						{
