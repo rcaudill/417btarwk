@@ -1143,7 +1143,8 @@ public class BitTortoise
 		byte [] byteArray = new byte[length];
 		try
 		{
-			destinationFile.read(byteArray, fileOffset, length);
+			destinationFile.seek(fileOffset);
+			destinationFile.read(byteArray, 0, length);
 		}
 		catch(IOException e)
 		{
