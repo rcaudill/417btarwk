@@ -63,13 +63,17 @@ public class Peer
 	public ByteBuffer readBuffer;
 	public int bytesLeft;
 	public int bytesReadThisRound;
+	public int bytesSentThisRound;
 	
 	public ByteBuffer sendBuffer;
 	public int unsent;
 	
+	private boolean unsentIsPiece;
+	
 	public BitSet advertisedPieces; // Pieces that we (this client) have advertised to other peers
 	
 	/**
+	 * Constructor
 	 * @param info_hash 20-byte SHA1 hash of the info key in the metainfo file. This is the same info_hash that is transmitted in tracker requests.
 	 * @param peer_id 20-byte string that is being used by the other peer as their peer id.
 	 * @param my_peer_id 20-byte string used as a unique ID for this client. This is usually the same peer_id that is transmitted in tracker requests (but not always e.g. an anonymity option in Azureus).
@@ -96,8 +100,12 @@ public class Peer
 		
 		this.sendBuffer = null;
 		this.unsent = 0;
+		this.unsentIsPiece = false;
+		this.bytesReadThisRound = 0;
+		this.bytesSentThisRound = 0;
 		
 		this.completedPieces = new BitSet();
+		this.advertisedPieces = new BitSet();
 		
 		try
 		{
@@ -131,18 +139,41 @@ public class Peer
 		}
 	}
 	
+	/**
+	 * This method cleans up all of the things that it needs to when the remote host is trying to close.
+	 */
+	public void cleanup()
+	{
+		for(BlockRequest br : this.sendRequests)
+		{
+			if(br.status != BlockRequest.FINISHED)
+				br.status = BlockRequest.UNASSIGNED;
+		}
+	}
+	
+	/**
+	 * Converts this Peer Object into it's string representation for easy understanding of what it is:
+	 */
 	public String toString() {
 		return "( INFO_HASH:" + getBytesAsHex(info_hash) + ", PEER_ID:" + getBytesAsHex(peer_id) + ", " + ip + ":" + port + ")\n";
 	}
 	
+	/**
+	 * Tool to get a byte array written out as hex
+	 * @param bytes The byte array
+	 * @return The hexadecimal string representation of the byte array 
+	 */
 	public static String getBytesAsHex(byte[] bytes) {
 		String output = new String();
 		for ( byte b : bytes ) {
 			output += Integer.toHexString( b & 0xff ) + " " ;
 		}
-		return output;
+		return output.trim();
 	}
 	
+	/**
+	 * Checks whether this object is equal to another object (checks type, ip, port, peer_id, and info_hash)
+	 */
 	public boolean equals(Object o)
 	{
 		if(o instanceof Peer)
@@ -161,7 +192,7 @@ public class Peer
 	 * @param completedPieces the pieces that we have already completed
 	 * @return whether there were any IOExceptions thrown that mean we should stop communicating with this peer
 	 */
-	public boolean sendMessage(SocketChannel sc, BitSet completedPieces)
+	public boolean sendMessage(SocketChannel sc, BitSet receivedPieces)
 	{
 		// Determine what it is that we need to send, if anything:
 		if(this.unsent > 0)
@@ -172,7 +203,20 @@ public class Peer
 				int sent = sc.write(this.sendBuffer);
 				this.unsent -= sent;
 				
-				lastMessageSentTime = (new Date()).getTime();
+				if(this.unsentIsPiece)
+				{
+					this.bytesSentThisRound += sent;
+					
+					if(this.unsent == 0)
+					{
+						this.unsentIsPiece = false;
+					}
+				}
+				
+				this.lastMessageSentTime = (new Date()).getTime();
+				
+				if(BitTortoise.verbose)
+					System.out.println("Continuation message sent. (Peer " + this.ip + ":" + this.port + ")\n");
 			}
 			catch(IOException e)
 			{
@@ -186,25 +230,28 @@ public class Peer
 			if(this.handshake_sent)
 			{
 				// If we've sent a handshake to them, we have completed the handshake
-				if(completedPieces.isEmpty() && !this.sent_bitfield)
+				if(!receivedPieces.isEmpty() && !this.sent_bitfield)
 				{
 					try
 					{
-						byte[] bytesToSend = MessageLibrary.getBitfieldMessage(BitTortoise.byteArrayFromBitSet(completedPieces, completedPieces.length()));
+						byte[] bytesToSend = MessageLibrary.getBitfieldMessage(BitTortoise.byteArrayFromBitSet(receivedPieces, receivedPieces.length()));
 						this.sendBuffer = ByteBuffer.wrap(bytesToSend);
 						int sent = sc.write(this.sendBuffer);
 						this.unsent = bytesToSend.length - sent;
 						
 						this.sent_bitfield = true;
 						
-						lastMessageSentTime = (new Date()).getTime();
+						this.lastMessageSentTime = (new Date()).getTime();
+						
+						if(BitTortoise.verbose)
+							System.out.println("Bitfield message sent. (Peer " + this.ip + ":" + this.port + ")\n");
 					}
 					catch(IOException e)
 					{
 						return false;
 					}
 				}
-				else if(this.shouldChoke || this.shouldUnchoke)
+				else if((!this.am_choking && this.shouldChoke) || (this.am_choking && this.shouldUnchoke))
 				{
 					if(this.shouldChoke)
 					{
@@ -216,7 +263,10 @@ public class Peer
 							
 							this.am_choking = true;
 							
-							lastMessageSentTime = (new Date()).getTime();
+							this.lastMessageSentTime = (new Date()).getTime();
+							
+							if(BitTortoise.verbose)
+								System.out.println("Choke message sent. (Peer " + this.ip + ":" + this.port + ")\n");
 						}
 						catch(IOException e)
 						{
@@ -233,15 +283,20 @@ public class Peer
 							
 							this.am_choking = false;
 							
-							lastMessageSentTime = (new Date()).getTime();
+							this.lastMessageSentTime = (new Date()).getTime();
+							
+							if(BitTortoise.verbose)
+								System.out.println("Unchoke message sent. (Peer " + this.ip + ":" + this.port + ")\n");
 						}
 						catch(IOException e)
 						{
 							return false;
 						}
 					}
+					this.shouldChoke = false;
+					this.shouldUnchoke = false;
 				}
-				else if(this.shouldInterest || this.shouldUninterest)
+				else if((!this.am_interested && this.shouldInterest) || (this.am_interested && this.shouldUninterest))
 				{
 					if(this.shouldInterest)
 					{
@@ -253,7 +308,10 @@ public class Peer
 							
 							this.am_interested = true;
 							
-							lastMessageSentTime = (new Date()).getTime();
+							this.lastMessageSentTime = (new Date()).getTime();
+							
+							if(BitTortoise.verbose)
+								System.out.println("Interested message sent. (Peer " + this.ip + ":" + this.port + ")\n");
 						}
 						catch(IOException e)
 						{
@@ -270,13 +328,18 @@ public class Peer
 							
 							this.am_interested = false;
 							
-							lastMessageSentTime = (new Date()).getTime();
+							this.lastMessageSentTime = (new Date()).getTime();
+							
+							if(BitTortoise.verbose)
+								System.out.println("Not Interested message sent. (Peer " + this.ip + ":" + this.port + ")\n");
 						}
 						catch(IOException e)
 						{
 							return false;
 						}
 					}
+					this.shouldInterest = false;
+					this.shouldUninterest = false;
 				}
 				else if(this.shouldCancel != null)
 				{
@@ -290,7 +353,10 @@ public class Peer
 						
 						this.shouldCancel = null;
 						
-						lastMessageSentTime = (new Date()).getTime();
+						this.lastMessageSentTime = (new Date()).getTime();
+						
+						if(BitTortoise.verbose)
+							System.out.println("Cancel (" + this.shouldCancel.piece + "," + this.shouldCancel.offset + "," + this.shouldCancel.length + ") message sent. (Peer " + this.ip + ":" + this.port + ")\n");
 					}
 					catch(IOException e)
 					{
@@ -315,7 +381,10 @@ public class Peer
 									
 									br.status = BlockRequest.REQUESTED;
 									
-									lastMessageSentTime = (new Date()).getTime();
+									this.lastMessageSentTime = (new Date()).getTime();
+									
+									if(BitTortoise.verbose)
+										System.out.println("Request (" + br.piece + "," + br.offset + "," + br.length + ") message sent. (Peer " + this.ip + ":" + this.port + ")\n");
 								}
 								catch(IOException e)
 								{
@@ -337,7 +406,21 @@ public class Peer
 							int sent = sc.write(this.sendBuffer);
 							this.unsent = bytesToSend.length - sent;
 							
-							lastMessageSentTime = (new Date()).getTime();
+							this.lastMessageSentTime = (new Date()).getTime();
+							
+							this.bytesSentThisRound += sent;
+							
+							if(this.unsent == 0)
+							{
+								this.unsentIsPiece = false;
+							}
+							else
+							{
+								this.unsentIsPiece = true;
+							}
+							
+							if(BitTortoise.verbose)
+								System.out.println("Piece (" + br.piece + "," + br.offset + "," + br.length + ") message sent. (Peer " + this.ip + ":" + this.port + ")\n");
 						}
 						catch(IOException e)
 						{
@@ -347,7 +430,7 @@ public class Peer
 					else
 					{
 						// Advertise new blocks that we have gotten
-						BitSet newPiecesToAdvertise = (BitSet)completedPieces.clone();
+						BitSet newPiecesToAdvertise = (BitSet)receivedPieces.clone();
 						newPiecesToAdvertise.andNot(this.advertisedPieces);
 						if(!newPiecesToAdvertise.isEmpty())
 						{
@@ -370,7 +453,10 @@ public class Peer
 								
 								this.advertisedPieces.set(toSend);
 								
-								lastMessageSentTime = (new Date()).getTime();
+								this.lastMessageSentTime = (new Date()).getTime();
+								
+								if(BitTortoise.verbose)
+									System.out.println("Have (" + Integer.toHexString(toSend) + ") message sent. (Peer " + this.ip + ":" + this.port + ")\n");
 							}
 							catch(IOException e)
 							{
@@ -381,7 +467,7 @@ public class Peer
 						}
 						
 						long now = (new Date()).getTime();
-						if(now - lastMessageSentTime >= 2 * 60000) // if it has been 2 minutes, send a keep_alive message
+						if(now - this.lastMessageSentTime >= 2 * 60000) // if it has been 2 minutes, send a keep_alive message
 						{
 							// Otherwise, if there has been enough time since the last time a message was sent, send a keep-alive message
 							try
@@ -390,7 +476,10 @@ public class Peer
 								int sent = sc.write(this.sendBuffer);
 								this.unsent = MessageLibrary.keep_alive.length - sent;
 								
-								lastMessageSentTime = (new Date()).getTime();
+								this.lastMessageSentTime = (new Date()).getTime();
+								
+								if(BitTortoise.verbose)
+									System.out.println("Keep-alive message sent. (Peer " + this.ip + ":" + this.port + ")\n");
 							}
 							catch(IOException e)
 							{
@@ -409,7 +498,12 @@ public class Peer
 					int sent = sc.write(this.sendBuffer);
 					this.unsent = this.handshake.length - sent;
 					
-					lastMessageSentTime = (new Date()).getTime();
+					this.lastMessageSentTime = (new Date()).getTime();
+					
+					this.handshake_sent = true;
+					
+					if(BitTortoise.verbose)
+						System.out.println("Handshake message sent. (Peer " + this.ip + ":" + this.port + ")\n");
 				}
 				catch(IOException e)
 				{

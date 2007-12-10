@@ -22,6 +22,8 @@ import java.nio.channels.*;
 
 public class BitTortoise
 {
+	public static boolean verbose = false;
+	
 	private static final int MAX_OUTSTANDING_REQUESTS = 5;
 	
 	private static TorrentFile torrentFile; // the object into which the .torrent file is b-decoded
@@ -31,7 +33,7 @@ public class BitTortoise
 	private static BitSet completedPieces; // Whether the Pieces/blocks of the file are completed or not
 	
 	/**
-	 * Usage: "java bittortoise <torrent_file> [<destination_file> [port]]" 
+	 * Usage: "java bittortoise <torrent_file> [<destination_file> [port]] [-v]" 
 	 * 
 	 * @param args
 	 */
@@ -71,12 +73,21 @@ public class BitTortoise
 		// Verify that the correct argument(s) were used:
 		if(args.length < 1 || args.length > 3)
 		{
-			System.err.println("Usage: java bittortoise <torrent_file> [<destination_file> [port]]");
+			System.err.println("Usage: java bittortoise <torrent_file> [<destination_file> [port]] [-v]");
 			System.exit(1);
 		}
 		port = 6881; // default port is 6881
 		if(args.length == 3)
 			port = Integer.parseInt(args[2]);
+		
+		for(String arg : args)
+		{
+			if(arg.equals("-v"))
+			{
+				verbose = true;
+				break;
+			}
+		}
 		
 		// Parse the torrent file.
 		torrentFile = new TorrentFile();
@@ -102,6 +113,9 @@ public class BitTortoise
 				outstandingPieces.get(i).addBlock(j * block_length, block_length);
 			}
 		}
+
+		if(BitTortoise.verbose)
+			System.out.println("Finished parsing torrent file.");
 		
 		// Extract a list of peers, and other information from the tracker:
 		peerList = new LinkedList<Peer>(); // List of peer objects (uses Generics)
@@ -133,6 +147,9 @@ public class BitTortoise
 		{
 			System.err.println("Error connecting to or reading from Tracker: " + e.getMessage());
 		}
+
+		if(BitTortoise.verbose)
+			System.out.println("Finished parsing tracker results.");
 		
 		// Create the destination file:
 		try
@@ -156,6 +173,9 @@ public class BitTortoise
 			System.err.println("Error creating file: " + e.getMessage());
 			System.exit(1);
 		}
+		
+		if(BitTortoise.verbose)
+			System.out.println("Finished creating destination file.");
 		/*
 		byte[] buffer = new byte[1000];
 		ByteBuffer byteBuffer = ByteBuffer.allocate(1000);
@@ -207,35 +227,81 @@ public class BitTortoise
 			{
 				finish = new Date();
 				float elapsedTimeSec = (finish.getTime() - start.getTime())/1000F;
-			    /*if ten seconds has past, reorder the top peers get a new one to opt unchoke.*/
-			    if(elapsedTimeSec % 10 == 0){
-			    	ArrayList<Peer> possiblePeers = new ArrayList<Peer>();
-			    	for(Map.Entry<SocketChannel, Peer> e : activePeerMap.entrySet()){
-			    		if(e.getValue() != null){
-			    			possiblePeers.add(e.getValue());
-			    		}
-			    	}
-			    	
-			    	/*sorts it based on bytesReadThisRound*/
-			    	Collections.sort(possiblePeers, new topThreeComparator());
-			    	possiblePeers.get(0).shouldUnchoke=true;
-			    	possiblePeers.get(1).shouldUnchoke=true;
-			    	possiblePeers.get(2).shouldUnchoke=true;
-			    	
-			    	/*get one to randomly unchoke*/
-			    	int optimisticUnchokeIndex = (int)((Math.random() * possiblePeers.size()) + 3); 
-			    	possiblePeers.get(optimisticUnchokeIndex).shouldUnchoke=true;
-			    	
-			    	/*go through and set the peers as choked if they aren't already*/
-			    	for(int j=0;j<possiblePeers.size();j++){
-			    		if(possiblePeers.get(j).am_choking == false &&
-			    				possiblePeers.get(j).shouldUnchoke == false){
-			    			possiblePeers.get(j).shouldChoke = true;
-			    		}
-			    	}
-			    	start = new Date();
-			    }
-			    
+				// if ten seconds has past, reorder the top peers get a new one
+				// to opt unchoke.
+				if (elapsedTimeSec % 10 == 0)
+				{
+					ArrayList<Peer> possiblePeers = new ArrayList<Peer>();
+					for(Map.Entry<SocketChannel, Peer> e : activePeerMap.entrySet())
+					{
+						if(e.getValue() != null)
+						{
+							possiblePeers.add(e.getValue());
+						}
+					}
+					
+					// sorts it based on bytesReadThisRound 
+					// To avoid Array OOB errors, make sure there are at least 3, otherwise unchoke all
+					Collections.sort(possiblePeers, new topThreeComparator());
+					if(possiblePeers.size() > 3)
+					{
+						// Unchoke the top 3 peers that are sending us stuff, regardless... also make sure that there are (top) 3 interested peers unchoked
+						int interested = 0;
+						if(possiblePeers.get(0).peer_interested)
+							interested++;
+						if(possiblePeers.get(1).peer_interested)
+							interested++;
+						if(possiblePeers.get(2).peer_interested)
+							interested++;
+						
+						possiblePeers.get(0).shouldUnchoke = true;
+						possiblePeers.get(1).shouldUnchoke = true;
+						possiblePeers.get(2).shouldUnchoke = true;
+						
+						int index = 3;
+						while(interested < 3 && index < possiblePeers.size())
+						{
+							if(possiblePeers.get(index).peer_interested)
+							{
+								if(possiblePeers.get(index).am_choking)
+									possiblePeers.get(index).shouldUnchoke = true;
+								interested++;
+							}
+							index ++;
+						}
+					}
+					else
+					{
+						for(Peer p : possiblePeers)
+						{
+							if(p.am_choking)
+								p.shouldUnchoke = true;
+						}
+					}
+					
+					// get one to randomly unchoke
+					int optimisticUnchokeIndex = (int)(Math.random() * (possiblePeers.size() - 3));
+					optimisticUnchokeIndex = optimisticUnchokeIndex + 3;
+					if(optimisticUnchokeIndex > 0 && optimisticUnchokeIndex < possiblePeers.size() && !possiblePeers.get(optimisticUnchokeIndex).shouldUnchoke && possiblePeers.get(optimisticUnchokeIndex).am_choking)
+						possiblePeers.get(optimisticUnchokeIndex).shouldUnchoke = true;
+					
+					// go through and set the peers as choked if they aren't already
+					for (int j = 0; j < possiblePeers.size(); j++)
+					{
+						Peer p = possiblePeers.get(j);
+						if (p.am_choking == false && p.shouldUnchoke == false)
+						{
+							p.shouldChoke = true;
+						}
+						else
+						{
+							p.shouldChoke = false;
+						}
+						p.bytesReadThisRound = 0;
+					}
+					start = new Date();
+				}
+				
 				int num = select.selectNow();
 				
 				if(num > 0)
@@ -259,6 +325,9 @@ public class BitTortoise
 									newConnection.register(select, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
 									
 									numConnections ++;
+
+									if(BitTortoise.verbose)
+										System.out.println("New outgoing connection finished. (Peer " + newConnection.socket().getInetAddress().getHostAddress() + ":" + newConnection.socket().getPort() + ")");
 								}
 							}
 							else if(key.isConnectable())
@@ -281,7 +350,8 @@ public class BitTortoise
 										// Update situation:
 										p.handshake_sent = true;
 										
-										numConnections ++;
+										if(BitTortoise.verbose)
+											System.out.println("New outgoing connection finished. (Peer " + p.ip + ":" + p.port + ")");
 									}
 									catch(IOException e)
 									{
@@ -292,6 +362,7 @@ public class BitTortoise
 											removePeer(p, activePeerMap);
 										}
 										key.cancel();
+										numConnections--;
 									}
 								}
 								else
@@ -303,6 +374,7 @@ public class BitTortoise
 										removePeer(p, pendingPeerMap);
 									}
 									key.cancel();
+									numConnections--;
 								}
 							}
 							else if(key.isReadable())
@@ -316,7 +388,10 @@ public class BitTortoise
 									if(!readAndProcess(activePeerMap.get(sc), sc, true))
 									{
 										key.cancel();
-										activePeerMap.remove(sc);
+										if(activePeerMap.containsKey(sc) && activePeerMap.get(sc) != null)
+											activePeerMap.remove(sc).cleanup();
+										else
+											activePeerMap.remove(sc);
 										try
 										{
 											if(!sc.socket().isClosed())
@@ -326,12 +401,35 @@ public class BitTortoise
 										{
 											System.err.println("Error closing socket!");
 										}
+										
+										numConnections--;
 									}
 								}
 								else
 								{
 									ByteBuffer buf = ByteBuffer.allocate(1024);
 									size = sc.read(buf);
+									
+									// The other host is trying to disconnect (gracefully):
+									if(size < 0)
+									{
+										key.cancel();
+										if(activePeerMap.containsKey(sc) && activePeerMap.get(sc) != null)
+											activePeerMap.remove(sc).cleanup();
+										else
+											activePeerMap.remove(sc);
+										try
+										{
+											if(sc.isOpen())
+												sc.close();
+										}
+										catch(IOException e)
+										{
+											System.err.println("Error closing socket!");
+										}
+										
+										numConnections--;
+									}
 									
 									if(size > 67 && isHandshakeMessage(buf))
 									{
@@ -371,6 +469,9 @@ public class BitTortoise
 											
 											connectedTo.bytesLeft = size;
 											connectedTo.readBuffer = buf;
+
+											if(BitTortoise.verbose)
+												System.out.println("New incoming connection finished (received handshake). (Peer " + connectedTo.ip + ":" + connectedTo.port + ")");
 										}
 										
 										if(size != 0)
@@ -378,7 +479,10 @@ public class BitTortoise
 											if(!readAndProcess(activePeerMap.get(sc), sc, false))
 											{
 												key.cancel();
-												activePeerMap.remove(sc);
+												if(activePeerMap.containsKey(sc) && activePeerMap.get(sc) != null)
+													activePeerMap.remove(sc).cleanup();
+												else
+													activePeerMap.remove(sc);
 												try
 												{
 													if(sc.isOpen())
@@ -388,6 +492,8 @@ public class BitTortoise
 												{
 													System.err.println("Error closing socket!");
 												}
+
+												numConnections--;
 											}
 										}
 									}
@@ -408,7 +514,7 @@ public class BitTortoise
 								if(activePeerMap.containsKey(sc))
 								{
 									Peer writablePeer = activePeerMap.get(sc);
-									writablePeer.sendMessage(sc, completedPieces);
+									writablePeer.sendMessage(sc, BitTortoise.completedPieces);
 								}
 							}
 							else
@@ -454,6 +560,11 @@ public class BitTortoise
 									pendingPeerMap.put(sc, toConnect);
 									
 									succeeded = true;
+									
+									numConnections++;
+									
+									if(BitTortoise.verbose)
+										System.out.println("New outgoing connection started. (Peer " + toConnect.ip + ":" + toConnect.port + ")");
 								}
 								catch(IOException e)
 								{
@@ -468,6 +579,8 @@ public class BitTortoise
 									
 									if(temp != null)
 										temp.cancel();
+									
+									numConnections--;
 								}
 								peerList.remove(last);
 							}
@@ -618,7 +731,13 @@ public class BitTortoise
 			// Information has not been read from the SocketChannel yet.. Do so
 			try
 			{
-				p.bytesLeft += socketChannel.read(p.readBuffer);
+				int l = socketChannel.read(p.readBuffer);
+				
+				// If the other side is (orderly) trying to shut down the connection: 
+				if(l == -1)
+					return false;
+				
+				p.bytesLeft += l;
 				p.readBuffer.position(0);
 			}
 			catch(IOException e)
@@ -627,16 +746,22 @@ public class BitTortoise
 			}
 		}
 		
-		if (p.blockRequest != null && p.blockRequest.status == BlockRequest.STARTED) {
+		if(BitTortoise.verbose)
+			System.out.println("New " + p.bytesLeft + " byte message (" + Peer.getBytesAsHex(p.readBuffer.array()) + ") received. (Peer " + p.ip + ":" + p.port + ")");
+		
+		if (p.blockRequest != null && p.blockRequest.status == BlockRequest.STARTED)
+		{
 			byte[] block;
 			int bytesLeftInBlock = p.blockRequest.length - p.blockRequest.bytesRead;
-			if (p.bytesLeft <= bytesLeftInBlock) {
+			if (p.bytesLeft <= bytesLeftInBlock)
+			{
 				block = new byte[p.bytesLeft];
 				p.readBuffer.get(block, 0, p.bytesLeft);
 				p.readBuffer.clear();
 				p.bytesLeft = 0;
 			}
-			else {
+			else
+			{
 				block = new byte[bytesLeftInBlock];
 				p.readBuffer.get(block, 0, bytesLeftInBlock);
 				p.readBuffer.position(bytesLeftInBlock);
@@ -645,6 +770,9 @@ public class BitTortoise
 				p.bytesLeft -= bytesLeftInBlock;
 			}
 			processPieceMessage(p, p.blockRequest.piece, p.blockRequest.offset, p.blockRequest.length, block);
+			
+			if(BitTortoise.verbose)
+				System.out.println("Continuation of Piece message received. (Peer " + p.ip + ":" + p.port + ")\n");
 		}
 		
 		if(!p.handshake_received )
@@ -674,6 +802,9 @@ public class BitTortoise
 				}
 				
 				p.handshake_received = true;
+				
+				if(BitTortoise.verbose)
+					System.out.println("Handshake message received. (Peer " + p.ip + ":" + p.port + ")\n");
 			}
 			else
 			{
@@ -695,6 +826,9 @@ public class BitTortoise
 				p.readBuffer.position(0);
 				
 				p.bytesLeft -= 4;
+				
+				if(BitTortoise.verbose)
+					System.out.println("Keep-alive message received. (Peer " + p.ip + ":" + p.port + ")\n");
 			}
 			else if(length >= 1 && p.bytesLeft >= 5)
 			{
@@ -712,6 +846,9 @@ public class BitTortoise
 					p.readBuffer.position(0);
 					
 					p.bytesLeft -= 5;
+					
+					if(BitTortoise.verbose)
+						System.out.println("Choke message received. (Peer " + p.ip + ":" + p.port + ")\n");
 				}
 				else if(id == 1)
 				{
@@ -724,9 +861,9 @@ public class BitTortoise
 					// loops and find the first open piece - This could be much better
 					for(int i=choices.nextSetBit(0); i>=0; i=choices.nextSetBit(i+1))
 					{
-						if(completedPieces.get(i) == false)
+						if(BitTortoise.completedPieces.get(i) == false)
 						{
-							for(BlockRequest br : outstandingPieces.get(i).blocks)
+							for(BlockRequest br : BitTortoise.outstandingPieces.get(i).blocks)
 							{
 								if(p.sendRequests.size() == MAX_OUTSTANDING_REQUESTS)
 									break;
@@ -745,6 +882,9 @@ public class BitTortoise
 					p.readBuffer.position(0);
 					
 					p.bytesLeft -= 5;
+					
+					if(BitTortoise.verbose)
+						System.out.println("Unchoke message received. (Peer " + p.ip + ":" + p.port + ")\n");
 				}
 				else if(id == 2)
 				{
@@ -759,6 +899,9 @@ public class BitTortoise
 					p.readBuffer.position(0);
 					
 					p.bytesLeft -= 5;
+					
+					if(BitTortoise.verbose)
+						System.out.println("Interested message received. (Peer " + p.ip + ":" + p.port + ")\n");
 				}
 				else if(id == 3)
 				{
@@ -773,6 +916,9 @@ public class BitTortoise
 					p.readBuffer.position(0);
 					
 					p.bytesLeft -= 5;
+					
+					if(BitTortoise.verbose)
+						System.out.println("Not Interested message received. (Peer " + p.ip + ":" + p.port + ")\n");
 				}
 				else if(id == 4)
 				{
@@ -788,7 +934,12 @@ public class BitTortoise
 						int piece_index = p.readBuffer.getInt(5);
 						p.completedPieces.set(piece_index, true);
 						
-						// More
+						// Set us to interested if they have something we want (and we are not already interested):
+						BitSet need = (BitSet)p.completedPieces.clone();
+						need.andNot(BitTortoise.completedPieces);
+						
+						if(!p.am_interested && !need.isEmpty())
+							p.shouldInterest = true;
 						
 						// Perform state cleanup:
 						p.readBuffer.position(9);
@@ -796,6 +947,9 @@ public class BitTortoise
 						p.readBuffer.position(0);
 						
 						p.bytesLeft -= 9;
+						
+						if(BitTortoise.verbose)
+							System.out.println("Have (" + Integer.toHexString(piece_index) + ") message received. (Peer " + p.ip + ":" + p.port + ")\n");
 					}
 				}
 				else if(id == 5)
@@ -814,7 +968,12 @@ public class BitTortoise
 						p.readBuffer.get(ba);
 						p.completedPieces = BitTortoise.bitSetFromByteArray(ba);
 						
-						// More??
+						// Set us to interested if they have something we want (and we are not already interested):
+						BitSet need = (BitSet)p.completedPieces.clone();
+						need.andNot(BitTortoise.completedPieces);
+						
+						if(!p.am_interested && !need.isEmpty())
+							p.shouldInterest = true;
 						
 						// Perform state cleanup:
 						p.readBuffer.position(length + 4);
@@ -822,6 +981,9 @@ public class BitTortoise
 						p.readBuffer.position(0);
 						
 						p.bytesLeft -= (length + 4);
+						
+						if(BitTortoise.verbose)
+							System.out.println("Bitfield message received. (Peer " + p.ip + ":" + p.port + ")\n");
 					}
 				}
 				else if(id == 6)
@@ -851,6 +1013,9 @@ public class BitTortoise
 						p.readBuffer.position(0);
 						
 						p.bytesLeft -= 17;
+						
+						if(BitTortoise.verbose)
+							System.out.println("Request (" + request_index + "," + request_begin + "," + request_length + ") message received. (Peer " + p.ip + ":" + p.port + ")\n");
 					}
 				}
 				else if(id == 7)
@@ -869,15 +1034,21 @@ public class BitTortoise
 					
 					//convert bytebuffer into byte array and store it in 
 					byte [] block = new byte[p.bytesLeft - 13];
-					p.readBuffer.get(block, 10, p.bytesLeft - 13);
+					p.readBuffer.position(13);
+					p.readBuffer.get(block, 0, p.bytesLeft - 13);
 					processPieceMessage(p, piece_index, block_begin, block_length, block);
 					
+					// Note: the following should really be done within "processPieceMessage" instead of here, but whatever:
 					// Perform state cleanup:
-					p.readBuffer.position(length + 4);
+					int amountToTrim = Math.min(length + 4, p.bytesLeft);
+					p.readBuffer.position(amountToTrim);
 					p.readBuffer.compact();
 					p.readBuffer.position(0);
 					
-					p.bytesLeft -= (length + 4);
+					p.bytesLeft -= (amountToTrim);
+					
+					if(BitTortoise.verbose)
+						System.out.println("Piece (" + piece_index + "," + block_begin + "," + block_length + ") message received. (Peer " + p.ip + ":" + p.port + ")\n");
 				}
 				else if(id == 8)
 				{
@@ -911,6 +1082,9 @@ public class BitTortoise
 						p.readBuffer.position(0);
 						
 						p.bytesLeft -= 17;
+						
+						if(BitTortoise.verbose)
+							System.out.println("Cancel (" + cancel_index + "," + cancel_begin + "," + cancel_length + ") message received. (Peer " + p.ip + ":" + p.port + ")\n");
 					}
 				}
 				else
@@ -927,6 +1101,9 @@ public class BitTortoise
 						p.readBuffer.position(0);
 						
 						p.bytesLeft -= (length + 4);
+						
+						if(BitTortoise.verbose)
+							System.out.println("Unknown message received. (Peer " + p.ip + ":" + p.port + ")\n");
 					}
 				}
 			}
@@ -970,6 +1147,10 @@ public class BitTortoise
 	}
 	
 	public static boolean processPieceMessage(Peer p, int piece_index, int block_begin, int block_length, byte[] block) {
+		// Update the number of bytes read this round for this peer:
+		p.bytesReadThisRound += block.length;
+		
+		// Do other stuff (by KENNY!):
 		if (!storePiece(p, piece_index, block_begin, block_length, block)) {
 			return false;
 		}
