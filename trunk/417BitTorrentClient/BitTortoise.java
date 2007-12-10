@@ -879,8 +879,24 @@ public class BitTortoise
 					p.peer_choking = false;
 					BitSet choices = p.completedPieces;
 					
+					//add block requests to a peer until it has its maximum outstanding requests
+					//it's totally random, which is better than linear, but not as good as rarest first
+					while(choices.isEmpty() == false && p.sendRequests.size() < MAX_OUTSTANDING_REQUESTS){
+							int i=choices.nextSetBit((int)(Math.random()*(choices.length())));
+							for(BlockRequest br : outstandingPieces.get(i).blocks)
+							{
+								if(p.sendRequests.size() == MAX_OUTSTANDING_REQUESTS)
+									break;
+								if(br.status == BlockRequest.UNASSIGNED)
+								{
+									br.status = BlockRequest.UNREQUESTED;
+									p.sendRequests.add(br);
+								}
+							}
+						}
+					
 					// loops and find the first open piece - This could be much better
-					for(int i=choices.nextSetBit(0); i>=0; i=choices.nextSetBit(i+1))
+					/*for(int i=choices.nextSetBit(0); i>=0; i=choices.nextSetBit(i+1))
 					{
 						if(BitTortoise.completedPieces.get(i) == false)
 						{
@@ -896,7 +912,7 @@ public class BitTortoise
 							}
 							break;
 						}
-					}
+					}*/
 					// Perform state cleanup:
 					p.readBuffer.position(5);
 					p.readBuffer.compact();
