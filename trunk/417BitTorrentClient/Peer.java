@@ -296,9 +296,9 @@ public class Peer
 					this.shouldChoke = false;
 					this.shouldUnchoke = false;
 				}
-				else if((!this.am_interested && this.shouldInterest) || (this.am_interested && this.shouldUninterest))
+				else if((this.shouldInterest) || (this.shouldUninterest))
 				{
-					if(this.shouldInterest)
+					if(!this.am_interested && this.shouldInterest)
 					{
 						try
 						{
@@ -318,7 +318,7 @@ public class Peer
 							return false;
 						}
 					}
-					else // if(this.shouldUninterest)
+					else if(this.am_interested && this.shouldUninterest)
 					{
 						try
 						{
@@ -434,7 +434,12 @@ public class Peer
 						newPiecesToAdvertise.andNot(this.advertisedPieces);
 						if(!newPiecesToAdvertise.isEmpty())
 						{
-							// Advertise ones that they haven't reported having first:
+							// This means that we have gotten new blocks since the last time this area ran:
+							// We need to do two things: 
+							// 1. Send a have message to them about this new piece
+							// 2. Change interested state based on whether or not they now have anything we don't
+							
+							// 1. Advertise ones that they haven't reported having first:
 							BitSet theyDontHave = (BitSet)newPiecesToAdvertise.clone();
 							theyDontHave.andNot(this.completedPieces);
 							if(!theyDontHave.isEmpty())
@@ -462,6 +467,13 @@ public class Peer
 							{
 								return false;
 							}
+							
+							// 2. Update interested status next time:
+							BitSet need = (BitSet)this.completedPieces.clone();
+							need.andNot(receivedPieces);
+							
+							if(this.am_interested && need.isEmpty())
+								this.shouldUninterest = true;
 							
 							return true;
 						}

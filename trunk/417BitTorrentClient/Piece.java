@@ -36,6 +36,20 @@ public class Piece {
 		return true;
 	}
 	
+	public boolean inProgress()
+	{
+		if(this.allFinished())
+			return false;
+		for(int i=0; i<blocks.size(); i++)
+		{
+			if(blocks.get(i).status == BlockRequest.STARTED || blocks.get(i).status == BlockRequest.FINISHED)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+	
 	public String toString() {
 		return "Piece: " + pieceNum + " blocks: " + blocks + "\n";
 	}
