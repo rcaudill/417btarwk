@@ -30,6 +30,8 @@ public class BitTortoise
 	private static int block_length = 16384; //The reality is near all clients will now use 2^14 (16KB) requests. Due to clients that enforce that size, it is recommended that implementations make requests of that size. (TheoryOrg spec)
 	private static BitSet completedPieces; // Whether the Pieces/blocks of the file are completed or not
 	private static BitSet inProgress;
+	private static long lastTrackerCommunication;
+	
 	
 	/**
 	 * Usage: "java bittortoise <torrent_file> [<destination_file> [port]] [-v]" 
@@ -137,7 +139,7 @@ public class BitTortoise
 				prev.next = justAdded;
 			}
 		}
-
+		
 		if(BitTortoise.verbose)
 			System.out.println("Finished parsing torrent file.");
 		
@@ -162,6 +164,7 @@ public class BitTortoise
 					"port=" + port).openConnection());
 			tracker.connect(connection, my_peer_id);
 			peerList = tracker.peerList;
+			BitTortoise.lastTrackerCommunication = (new Date()).getTime();
 		}
 		catch (UnknownHostException e)
 		{
@@ -532,6 +535,8 @@ public class BitTortoise
 							System.err.println("IO error - " + e.getMessage());
 							if(activePeerMap.containsKey((SocketChannel)key.channel()))
 								activePeerMap.get((SocketChannel)key.channel()).cleanup();
+							if(pendingPeerMap.containsKey((SocketChannel)key.channel()))
+								pendingPeerMap.get((SocketChannel)key.channel()).cleanup();
 							key.cancel();
 						}
 					}
@@ -599,9 +604,13 @@ public class BitTortoise
 								peerList.remove(last);
 							}
 						}
+						else
+						{
+							succeeded = true;
+						}
 					}
 				}
-				else if(numConnections < 30)
+				else if(numConnections < 30 && (new Date()).getTime() - tracker.min_interval * 1000 > BitTortoise.lastTrackerCommunication)
 				{
 					HttpURLConnection tempConnection = (HttpURLConnection)(new URL(torrentFile.tracker_url + "?" +
 							"info_hash=" + torrentFile.info_hash_as_url + "&" +
@@ -619,6 +628,7 @@ public class BitTortoise
 							peerList.add(tracker.peerList.get(i));
 						}
 					}
+					BitTortoise.lastTrackerCommunication = (new Date()).getTime();
 				}
 			}
 		}
@@ -785,6 +795,7 @@ public class BitTortoise
 			// If we have finished receiving this Piece message:
 			if(p.blockRequest == null)
 			{
+				p.emptyFinishedRequests();
 				p.fill(BitTortoise.completedPieces,BitTortoise.inProgress, BitTortoise.outstandingPieces);
 			}
 			
@@ -884,6 +895,7 @@ public class BitTortoise
 					// Handle un-choke message:
 					p.peer_choking = false;
 					
+					p.emptyFinishedRequests();
 					p.fill(BitTortoise.completedPieces,BitTortoise.inProgress, BitTortoise.outstandingPieces);
 					
 					// Perform state cleanup:
@@ -1220,6 +1232,7 @@ public class BitTortoise
 					// The piece has been finished:
 					BitTortoise.inProgress.set(piece_index, false);
 					BitTortoise.completedPieces.set(piece_index, true);
+					System.out.println("Completed piece " + piece_index);
 				}
 				else
 				{
