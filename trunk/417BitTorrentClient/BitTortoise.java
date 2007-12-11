@@ -31,6 +31,7 @@ public class BitTortoise
 	private static Map<Integer, Piece> outstandingPieces = new HashMap<Integer, Piece>();
 	private static int block_length = 16384; //The reality is near all clients will now use 2^14 (16KB) requests. Due to clients that enforce that size, it is recommended that implementations make requests of that size. (TheoryOrg spec)
 	private static BitSet completedPieces; // Whether the Pieces/blocks of the file are completed or not
+	private static BitSet inProgress;
 	
 	/**
 	 * Usage: "java bittortoise <torrent_file> [<destination_file> [port]] [-v]" 
@@ -929,6 +930,9 @@ public class BitTortoise
 					
 					BitSet choices = (BitSet)p.completedPieces.clone();
 					choices.andNot(BitTortoise.completedPieces);
+					
+					BitSet betterChoices = (BitSet)choices.clone();
+					betterChoices.and(BitTortoise.inProgress);
 					
 					// add block requests to a peer until it has its maximum outstanding requests
 					// it's totally random, which is better than linear, but not as good as rarest first
