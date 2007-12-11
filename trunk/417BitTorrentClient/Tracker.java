@@ -84,7 +84,8 @@ public class Tracker {
 
 									if(peerInformation.containsKey("peer id") && peerInformation.containsKey("port") && peerInformation.containsKey("ip"))
 									{
-										peerList.add(new Peer(torrentFile.info_hash_as_binary, (byte[])peerInformation.get("peer id"), peerid, new String((byte[])(peerInformation.get("ip"))), (Integer)peerInformation.get("port")));
+										if(!java.util.Arrays.equals((byte[])peerInformation.get("peer id"),peerid))
+											peerList.add(new Peer(torrentFile.info_hash_as_binary, (byte[])peerInformation.get("peer id"), peerid, new String((byte[])(peerInformation.get("ip"))), (Integer)peerInformation.get("port")));
 									}
 									else
 									{
