@@ -85,5 +85,4 @@ public class Piece {
 	public String toString() {
 		return "Piece: " + pieceNum + " blocks: " + blocks + "\n";
 	}
-	
 }

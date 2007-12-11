@@ -58,7 +58,7 @@ public class Peer
 	public List<BlockRequest> receiveRequests; // Pieces that this client is sending out (received requests)
 	public List<BlockRequest> sendRequests; // Requests that this client is sending out
 	public BlockRequest blockRequest = null; //the block that you have requested for this peer to send you.
-	public BlockRequest shouldCancel; // The block that we (this client) wish to cancel the next time we hit a sendMessage.  Remove this from the sendRequests before setting this!
+	public List<BlockRequest> shouldCancel; // The block that we (this client) wish to cancel the next time we hit a sendMessage.  Remove this from the sendRequests before setting this!
 	
 	public long lastMessageSentTime;
 	// Status holders for what is being currently read
@@ -95,7 +95,7 @@ public class Peer
 		this.receiveRequests = new ArrayList<BlockRequest>();
 		this.sendRequests = new ArrayList<BlockRequest>();
 		this.sent_bitfield = false;
-		this.shouldCancel = null;
+		this.shouldCancel = new ArrayList<BlockRequest>();
 		
 		this.readBuffer = ByteBuffer.allocate(BYTES_TO_ALLOCATE);
 		this.bytesLeft = 0;
@@ -201,7 +201,7 @@ public class Peer
 	 * @param completedPieces the pieces that we have already completed
 	 * @return whether there were any IOExceptions thrown that mean we should stop communicating with this peer
 	 */
-	public boolean sendMessage(SocketChannel sc, BitSet receivedPieces)
+	public boolean sendMessage(SocketChannel sc, BitSet receivedPieces, BitSet inProgress, Map<Integer,Piece> outstandingPieces)
 	{
 		// Determine what it is that we need to send, if anything:
 		if(this.unsent > 0)
@@ -350,22 +350,26 @@ public class Peer
 					this.shouldInterest = false;
 					this.shouldUninterest = false;
 				}
-				else if(this.shouldCancel != null)
+				else if(!this.shouldCancel.isEmpty())
 				{
 					// Send a cancel message
 					try
 					{
-						byte[] bytesToSend = MessageLibrary.getCancelMessage(this.shouldCancel.piece, this.shouldCancel.offset, this.shouldCancel.length);
+						BlockRequest br = this.shouldCancel.get(0);
+						byte[] bytesToSend = MessageLibrary.getCancelMessage(br.piece, br.offset, br.length);
 						this.sendBuffer = ByteBuffer.wrap(bytesToSend);
 						int sent = sc.write(this.sendBuffer);
 						this.unsent = bytesToSend.length - sent;
 						
-						this.shouldCancel = null;
-						
 						this.lastMessageSentTime = (new Date()).getTime();
 						
 						if(BitTortoise.verbose)
-							System.out.println("Cancel (" + this.shouldCancel.piece + "," + this.shouldCancel.offset + "," + this.shouldCancel.length + ") message sent. (Peer " + this.ip + ":" + this.port + ")\n");
+							System.out.println("Cancel (" + br.piece + "," + br.offset + "," + br.length + ") message sent. (Peer " + this.ip + ":" + this.port + ")\n");
+						
+						this.sendRequests.remove(br);
+						this.shouldCancel.remove(0);
+						
+						this.fill(receivedPieces, inProgress, outstandingPieces);
 					}
 					catch(IOException e)
 					{
@@ -376,6 +380,7 @@ public class Peer
 				{
 					if(this.am_interested && !this.peer_choking)
 					{
+						long now = (new Date()).getTime();
 						// Send the next unsent request message:
 						for(BlockRequest br : this.sendRequests)
 						{
@@ -388,6 +393,7 @@ public class Peer
 									int sent = sc.write(this.sendBuffer);
 									this.unsent = bytesToSend.length - sent;
 									
+									br.timeModified = now;
 									br.status = BlockRequest.REQUESTED;
 									
 									this.lastMessageSentTime = (new Date()).getTime();
@@ -401,6 +407,10 @@ public class Peer
 								}
 								
 								return true;
+							}
+							else if(br.timeModified + 2*60*1000 < now)
+							{
+								this.shouldCancel.add(br);
 							}
 						}
 					}
@@ -534,5 +544,63 @@ public class Peer
 		}
 		
 		return true;
+	}
+	
+	public boolean fill(BitSet receivedPieces, BitSet inProgress, Map<Integer,Piece> outstandingPieces)
+	{
+		boolean madeChanges = false;
+		
+		BitSet choices = (BitSet)this.completedPieces.clone();
+		choices.andNot(receivedPieces);
+		
+		BitSet betterChoices = (BitSet)choices.clone();
+		betterChoices.and(inProgress);
+		
+		// Favor requests that have been completed:
+		// add block requests to a peer until it has its maximum outstanding requests
+		// it's almost totally random, which is better than linear, but not as good as rarest first
+		while(betterChoices.isEmpty() == false && this.sendRequests.size() < BitTortoise.MAX_OUTSTANDING_REQUESTS)
+		{
+			int i = betterChoices.nextSetBit((int)(Math.random()*(betterChoices.length())));
+			if(i != -1)
+			{
+				for(BlockRequest br : outstandingPieces.get(i).blocks)
+				{
+					if(this.sendRequests.size() == BitTortoise.MAX_OUTSTANDING_REQUESTS)
+						break;
+					if(br.status == BlockRequest.UNASSIGNED)
+					{
+						br.status = BlockRequest.UNREQUESTED;
+						this.sendRequests.add(br);
+						madeChanges = true;
+					}
+				}
+				betterChoices.set(i, false);
+			}
+		}
+		
+		// If there are no better choices left, and our sendRequests list is not yet large enough to our liking:
+		while(choices.isEmpty() == false && this.sendRequests.size() < BitTortoise.MAX_OUTSTANDING_REQUESTS)
+		{
+			int i = choices.nextSetBit((int)(Math.random()*(choices.length())));
+			if(i != -1)
+			{
+				for(BlockRequest br : outstandingPieces.get(i).blocks)
+				{
+					if(this.sendRequests.size() == BitTortoise.MAX_OUTSTANDING_REQUESTS)
+						break;
+					if(br.status == BlockRequest.UNASSIGNED)
+					{
+						inProgress.set(i, true);
+						br.status = BlockRequest.UNREQUESTED;
+						this.sendRequests.add(br);
+						madeChanges = true;
+					}
+				}
+				choices.set(i, false);
+			}
+		}
+		
+		return madeChanges;
 	}
 }

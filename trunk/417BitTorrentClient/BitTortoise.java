@@ -22,7 +22,7 @@ public class BitTortoise
 {
 	public static boolean verbose = false;
 	
-	private static final int MAX_OUTSTANDING_REQUESTS = 5;
+	public static final int MAX_OUTSTANDING_REQUESTS = 5;
 	
 	private static TorrentFile torrentFile; // the object into which the .torrent file is b-decoded
 	private static RandomAccessFile destinationFile; // The file into which we are writing
@@ -521,7 +521,7 @@ public class BitTortoise
 								if(activePeerMap.containsKey(sc))
 								{
 									Peer writablePeer = activePeerMap.get(sc);
-									writablePeer.sendMessage(sc, BitTortoise.completedPieces);
+									writablePeer.sendMessage(sc, BitTortoise.completedPieces, BitTortoise.inProgress, BitTortoise.outstandingPieces);
 								}
 							}
 							else
@@ -530,6 +530,8 @@ public class BitTortoise
 						catch(IOException e)
 						{
 							System.err.println("IO error - " + e.getMessage());
+							if(activePeerMap.containsKey((SocketChannel)key.channel()))
+								activePeerMap.get((SocketChannel)key.channel()).cleanup();
 							key.cancel();
 						}
 					}
@@ -783,54 +785,7 @@ public class BitTortoise
 			// If we have finished receiving this Piece message:
 			if(p.blockRequest == null)
 			{
-				BitSet choices = (BitSet)p.completedPieces.clone();
-				choices.andNot(BitTortoise.completedPieces);
-				
-				BitSet betterChoices = (BitSet)choices.clone();
-				betterChoices.and(BitTortoise.inProgress);
-				
-				// Favor requests that have been completed:
-				// add block requests to a peer until it has its maximum outstanding requests
-				// it's almost totally random, which is better than linear, but not as good as rarest first
-				while(betterChoices.isEmpty() == false && p.sendRequests.size() < MAX_OUTSTANDING_REQUESTS)
-				{
-					int i = betterChoices.nextSetBit((int)(Math.random()*(betterChoices.length())));
-					if(i != -1)
-					{
-						for(BlockRequest br : outstandingPieces.get(i).blocks)
-						{
-							if(p.sendRequests.size() == MAX_OUTSTANDING_REQUESTS)
-								break;
-							if(br.status == BlockRequest.UNASSIGNED)
-							{
-								br.status = BlockRequest.UNREQUESTED;
-								p.sendRequests.add(br);
-							}
-						}
-						betterChoices.set(i, false);
-					}
-				}
-				
-				// If there are no better choices left, and our sendRequests list is not yet large enough to our liking:
-				while(choices.isEmpty() == false && p.sendRequests.size() < MAX_OUTSTANDING_REQUESTS)
-				{
-					int i = choices.nextSetBit((int)(Math.random()*(choices.length())));
-					if(i != -1)
-					{
-						for(BlockRequest br : outstandingPieces.get(i).blocks)
-						{
-							if(p.sendRequests.size() == MAX_OUTSTANDING_REQUESTS)
-								break;
-							if(br.status == BlockRequest.UNASSIGNED)
-							{
-								BitTortoise.inProgress.set(i, true);
-								br.status = BlockRequest.UNREQUESTED;
-								p.sendRequests.add(br);
-							}
-						}
-						choices.set(i, false);
-					}
-				}
+				p.fill(BitTortoise.completedPieces,BitTortoise.inProgress, BitTortoise.outstandingPieces);
 			}
 			
 			if(BitTortoise.verbose)
@@ -929,73 +884,8 @@ public class BitTortoise
 					// Handle un-choke message:
 					p.peer_choking = false;
 					
-					BitSet choices = (BitSet)p.completedPieces.clone();
-					choices.andNot(BitTortoise.completedPieces);
+					p.fill(BitTortoise.completedPieces,BitTortoise.inProgress, BitTortoise.outstandingPieces);
 					
-					BitSet betterChoices = (BitSet)choices.clone();
-					betterChoices.and(BitTortoise.inProgress);
-					
-					// Favor requests that have been completed:
-					// add block requests to a peer until it has its maximum outstanding requests
-					// it's almost totally random, which is better than linear, but not as good as rarest first
-					while(betterChoices.isEmpty() == false && p.sendRequests.size() < MAX_OUTSTANDING_REQUESTS)
-					{
-						int i = betterChoices.nextSetBit((int)(Math.random()*(betterChoices.length())));
-						if(i != -1)
-						{
-							for(BlockRequest br : outstandingPieces.get(i).blocks)
-							{
-								if(p.sendRequests.size() == MAX_OUTSTANDING_REQUESTS)
-									break;
-								if(br.status == BlockRequest.UNASSIGNED)
-								{
-									br.status = BlockRequest.UNREQUESTED;
-									p.sendRequests.add(br);
-								}
-							}
-							betterChoices.set(i, false);
-						}
-					}
-					
-					// If there are no better choices left, and our sendRequests list is not yet large enough to our liking:
-					while(choices.isEmpty() == false && p.sendRequests.size() < MAX_OUTSTANDING_REQUESTS)
-					{
-						int i = choices.nextSetBit((int)(Math.random()*(choices.length())));
-						if(i != -1)
-						{
-							for(BlockRequest br : outstandingPieces.get(i).blocks)
-							{
-								if(p.sendRequests.size() == MAX_OUTSTANDING_REQUESTS)
-									break;
-								if(br.status == BlockRequest.UNASSIGNED)
-								{
-									BitTortoise.inProgress.set(i, true);
-									br.status = BlockRequest.UNREQUESTED;
-									p.sendRequests.add(br);
-								}
-							}
-							choices.set(i, false);
-						}
-					}
-					
-					// loops and find the first open piece - This could be much better
-					/*for(int i=choices.nextSetBit(0); i>=0; i=choices.nextSetBit(i+1))
-					{
-						if(BitTortoise.completedPieces.get(i) == false)
-						{
-							for(BlockRequest br : BitTortoise.outstandingPieces.get(i).blocks)
-							{
-								if(p.sendRequests.size() == MAX_OUTSTANDING_REQUESTS)
-									break;
-								if(br.status == BlockRequest.UNASSIGNED)
-								{
-									br.status = BlockRequest.UNREQUESTED;
-									p.sendRequests.add(br);
-								}
-							}
-							break;
-						}
-					}*/
 					// Perform state cleanup:
 					p.readBuffer.position(5);
 					p.readBuffer.compact();
@@ -1272,7 +1162,8 @@ public class BitTortoise
 		return MessageLibrary.getPieceMessage(index, begin, length, byteArray);
 	}
 	
-	public static boolean storePiece(Peer p, int piece_index, int piece_begin, byte [] block) {
+	public static boolean storePiece(Peer p, int piece_index, int piece_begin, byte [] block)
+	{
 		int fileOffset = (piece_index * torrentFile.piece_length) + piece_begin + p.blockRequest.bytesRead; 
 		try
 		{
@@ -1291,6 +1182,9 @@ public class BitTortoise
 	public static boolean processPieceMessage(Peer p, int piece_index, int block_begin, byte[] block) {
 		// Update the number of bytes read this round for this peer:
 		p.bytesReadThisRound += block.length;
+		
+		// Update the last time modified:
+		p.blockRequest.timeModified = (new Date()).getTime();
 		
 		// Do other stuff (by KENNY!):
 		if (!storePiece(p, piece_index, block_begin, block)) {
