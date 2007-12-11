@@ -304,6 +304,7 @@ public class Peer
 					}
 					this.shouldChoke = false;
 					this.shouldUnchoke = false;
+					this.sent_bitfield = true;
 				}
 				else if((this.shouldInterest) || (this.shouldUninterest))
 				{
@@ -349,6 +350,7 @@ public class Peer
 					}
 					this.shouldInterest = false;
 					this.shouldUninterest = false;
+					this.sent_bitfield = true;
 				}
 				else if(!this.shouldCancel.isEmpty())
 				{
@@ -375,10 +377,11 @@ public class Peer
 					{
 						return false;
 					}
+					this.sent_bitfield = true;
 				}
 				else
 				{
-					if(this.am_interested && !this.peer_choking)
+					if(this.am_interested && !this.peer_choking && !this.sendRequests.isEmpty())
 					{
 						long now = (new Date()).getTime();
 						// Send the next unsent request message:
@@ -519,6 +522,7 @@ public class Peer
 						}
 					}
 				}
+				this.sent_bitfield = true;
 			}
 			else if(!this.handshake_sent)
 			{
@@ -602,5 +606,20 @@ public class Peer
 		}
 		
 		return madeChanges;
+	}
+	
+	public void emptyFinishedRequests()
+	{
+		// Cycle through the list and remove requests with a "status" of "BlockRequest.FINISHED"
+		Iterator<BlockRequest> it = this.sendRequests.iterator();
+		while(it.hasNext())
+		{
+			BlockRequest br = it.next();
+			
+			if(br.status == BlockRequest.FINISHED)
+			{
+				it.remove();
+			}
+		}
 	}
 }
