@@ -18,8 +18,6 @@ import java.util.*;
 import java.nio.*;
 import java.nio.channels.*;
 
-
-
 public class BitTortoise
 {
 	public static boolean verbose = false;
@@ -199,33 +197,6 @@ public class BitTortoise
 		
 		if(BitTortoise.verbose)
 			System.out.println("Finished creating destination file.");
-		/*
-		byte[] buffer = new byte[1000];
-		ByteBuffer byteBuffer = ByteBuffer.allocate(1000);
-		
-		//new Peer(torrentFile.info_hash_as_binary, (byte[])peerInformation.get("peer id"), my_peer_id, new String((byte[])(peerInformation.get("ip"))), (Integer)peerInformation.get("port")))
-		for (int i=0; i < peerList.size(); i++) {
-			//System.out.println(peerList.get(i));
-			Peer peer = peerList.get(i);
-			Socket socket;
-			try 
-			{ 
-				socket = new Socket(peer.ip, peer.port); 
-				socket.getOutputStream().write(peer.handshake);
-				int numRead = socket.getInputStream().read(buffer);
-				System.out.println("Successful connect to " + peer.ip + ":" + peer.port);
-				//peer.processMessage(buffer, numRead);
-				System.out.println(buffer);
-				System.out.println("received " + numRead + " bytes: " +  Peer.getBytesAsHex(buffer));
-				//System.out.println("Message Type:" + peer.theType);
-			} catch (Exception e) {
-				System.out.println("Couldn't connect to " + peer.ip + ":" + peer.port);
-				System.out.println("removing peer from peerlist");
-				peerList.remove(peer);
-			}
-
-		}*/
-		
 		
 		// Start the main loop of the client - choose and connect to peers, accept connections from peers, attempt to get all of the file
 		numConnections = 0;
@@ -802,7 +773,7 @@ public class BitTortoise
 				p.readBuffer.position(0);
 				p.bytesLeft -= bytesLeftInBlock;
 			}
-			processPieceMessage(p, p.blockRequest.piece, p.blockRequest.offset, p.blockRequest.length, block);
+			processPieceMessage(p, p.blockRequest.piece, p.blockRequest.offset, block);
 			
 			// If we have finished receiving this Piece message:
 			if(p.blockRequest == null)
@@ -1195,7 +1166,7 @@ public class BitTortoise
 					byte [] block = new byte[p.bytesLeft - 13];
 					p.readBuffer.position(13);
 					p.readBuffer.get(block, 0, p.bytesLeft - 13);
-					processPieceMessage(p, piece_index, block_begin, block_length, block);
+					processPieceMessage(p, piece_index, block_begin, block);
 					
 					// Note: the following should really be done within "processPieceMessage" instead of here, but whatever:
 					// Perform state cleanup:
@@ -1291,7 +1262,7 @@ public class BitTortoise
 		return MessageLibrary.getPieceMessage(index, begin, length, byteArray);
 	}
 	
-	public static boolean storePiece(Peer p, int piece_index, int piece_begin, int piece_length, byte [] block) {
+	public static boolean storePiece(Peer p, int piece_index, int piece_begin, byte [] block) {
 		int fileOffset = (piece_index * torrentFile.piece_length) + piece_begin + p.blockRequest.bytesRead; 
 		try
 		{
@@ -1307,31 +1278,32 @@ public class BitTortoise
 		return true;
 	}
 	
-	public static boolean processPieceMessage(Peer p, int piece_index, int block_begin, int block_length, byte[] block) {
+	public static boolean processPieceMessage(Peer p, int piece_index, int block_begin, byte[] block) {
 		// Update the number of bytes read this round for this peer:
 		p.bytesReadThisRound += block.length;
 		
 		// Do other stuff (by KENNY!):
-		if (!storePiece(p, piece_index, block_begin, block_length, block)) {
+		if (!storePiece(p, piece_index, block_begin, block)) {
 			return false;
 		}
 		p.blockRequest.bytesRead += block.length;
 		if (p.blockRequest.bytesRead >= p.blockRequest.length) { //if done reading block
 			p.blockRequest.status = BlockRequest.FINISHED;
-			p.blockRequest = null;
+			p.blockRequest = null; //this peer is open to receive a new block
 			if (outstandingPieces.get(piece_index).allFinished()) {
 				byte [] entirePiece = new byte [torrentFile.piece_length]; //this is a HUGE array, is there a better way to do this?
 				byte [] mySHA1;
 				try {
-					destinationFile.read(entirePiece, piece_index * torrentFile.piece_length, torrentFile.piece_length);
-				} catch (Exception e) {
+					destinationFile.seek(torrentFile.piece_length * piece_index);
+					destinationFile.read(entirePiece, 0, torrentFile.piece_length);
+				} catch (IOException e) {
 					System.out.println("error reading in entire piece");
 					System.exit(1);
 				}
 				mySHA1 = SHA1Functions.getSha1Hash(entirePiece);
 				if (mySHA1.equals(torrentFile.piece_hash_values_as_binary.get(piece_index))) {
 					outstandingPieces.remove(piece_index);
-					//update bitset
+					completedPieces.set(piece_index);
 					if (outstandingPieces.isEmpty()) {
 						System.out.println("received entire file... do something");
 					}
@@ -1339,7 +1311,7 @@ public class BitTortoise
 					BitTortoise.inProgress.set(piece_index, false);
 				}
 				else {
-					//reset all blocks to empty and bytesread to 0
+					outstandingPieces.get(piece_index).resetAll();
 				}
 			}
 		}
