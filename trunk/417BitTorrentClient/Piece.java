@@ -10,10 +10,39 @@ public class Piece {
 		this.pieceNum = pieceNum;
 	}
 	
-	public void addBlock(int offset, int length) {
-		blocks.add(new BlockRequest(pieceNum, offset, length));
+	public BlockRequest coalesceBlock(BlockRequest br) {
+		if (br.prev != null && br.prev.status == BlockRequest.UNASSIGNED) {
+			br.prev.length += br.length;
+			br.prev.next = br.next;
+			blocks.remove(br);
+			return br.prev;
+		}
+		else if (br.next != null && br.next.status == BlockRequest.UNASSIGNED) {
+			br.length += br.next.length;
+			br.next = br.next.next;
+			blocks.remove(br.next);
+			return br;
+		}
+		return null;
 	}
 	
+	public BlockRequest splitBlock() {
+		//soo
+		return null;
+	}
+	
+	public BlockRequest addBlock(int offset, int length) {
+		BlockRequest br = new BlockRequest(pieceNum, offset, length);
+		blocks.add(br);
+		return br;
+	}
+	
+	public BlockRequest addBlock(int offset, int length, BlockRequest a, BlockRequest b) {
+		BlockRequest br = new BlockRequest(pieceNum, offset, length, a, b);
+		blocks.add(br);
+		return br;
+	}
+
 	public BlockRequest getBlock(int offset) {
 		for (int i=0; i < blocks.size(); i++) {
 			if (blocks.get(i).offset == offset) {
@@ -23,8 +52,11 @@ public class Piece {
 		return null;
 	}
 	
-	public void removeBlock(BlockRequest br) {
-		blocks.remove(br);
+	public void resetAll() {
+		for (int i=0; i<blocks.size(); i++) {
+			blocks.get(i).status = BlockRequest.UNASSIGNED;
+			blocks.get(i).bytesRead = 0;
+		}
 	}
 	
 	public boolean allFinished() {

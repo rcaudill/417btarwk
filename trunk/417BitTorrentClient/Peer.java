@@ -31,6 +31,8 @@ public class Peer
 	public String ip;
 	public int port;
 	public BitSet completedPieces; // the parts that the peer this object represents has (renamed so its purpose is more obvious)
+	public boolean isBitTortoisePeer; //true if peer is a fellow bit tortoise
+	public int blockSize = 16384;
 	
 	// Information about this client:
 	public byte[] my_peer_id = new byte[20];
@@ -120,6 +122,13 @@ public class Peer
 			System.err.println("Failed to initialze peer. Check for variable size overflow");
 			System.exit(1);
 		}
+		
+		String s = "";
+		for (int i=0; i<8; i++) {
+			s += this.peer_id[i];
+		}
+		isBitTortoisePeer = s.equals("-BT0001-");
+	
 		
 		try
 		{

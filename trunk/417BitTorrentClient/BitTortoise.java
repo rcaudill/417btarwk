@@ -130,8 +130,11 @@ public class BitTortoise
 		/* initialize all block requests for transfer */
 		for (int i=0; i < totalPieceCount; i++) {
 			outstandingPieces.put(new Integer(i), new Piece(i));
-			for (int j=0; j < torrentFile.piece_length / block_length; j++) {
-				outstandingPieces.get(i).addBlock(j * block_length, block_length);
+			outstandingPieces.get(i).addBlock(0 * block_length, block_length, null, null);
+			for (int j=1; j < torrentFile.piece_length / block_length; j++) {
+				BlockRequest prev = outstandingPieces.get(i).getBlock((j-1)* block_length);
+				BlockRequest justAdded = outstandingPieces.get(i).addBlock(j * block_length, block_length, prev, null);
+				prev.next = justAdded;
 			}
 		}
 
