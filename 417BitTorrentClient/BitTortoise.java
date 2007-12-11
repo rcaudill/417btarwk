@@ -127,6 +127,7 @@ public class BitTortoise
 		
 		totalPieceCount = ((int)torrentFile.file_length/torrentFile.piece_length) + 1;
 		completedPieces = new BitSet(totalPieceCount);
+		inProgress = new BitSet(totalPieceCount);
 		
 		/* initialize all block requests for transfer */
 		for (int i=0; i < totalPieceCount; i++) {
@@ -806,12 +807,35 @@ public class BitTortoise
 			// If we have finished receiving this Piece message:
 			if(p.blockRequest == null)
 			{
-				// Re-fill the requests queue:
 				BitSet choices = (BitSet)p.completedPieces.clone();
 				choices.andNot(BitTortoise.completedPieces);
 				
+				BitSet betterChoices = (BitSet)choices.clone();
+				betterChoices.and(BitTortoise.inProgress);
+				
+				// Favor requests that have been completed:
 				// add block requests to a peer until it has its maximum outstanding requests
-				// it's totally random, which is better than linear, but not as good as rarest first
+				// it's almost totally random, which is better than linear, but not as good as rarest first
+				while(betterChoices.isEmpty() == false && p.sendRequests.size() < MAX_OUTSTANDING_REQUESTS)
+				{
+					int i = betterChoices.nextSetBit((int)(Math.random()*(betterChoices.length())));
+					if(i != -1)
+					{
+						for(BlockRequest br : outstandingPieces.get(i).blocks)
+						{
+							if(p.sendRequests.size() == MAX_OUTSTANDING_REQUESTS)
+								break;
+							if(br.status == BlockRequest.UNASSIGNED)
+							{
+								br.status = BlockRequest.UNREQUESTED;
+								p.sendRequests.add(br);
+							}
+						}
+						betterChoices.set(i, false);
+					}
+				}
+				
+				// If there are no better choices left, and our sendRequests list is not yet large enough to our liking:
 				while(choices.isEmpty() == false && p.sendRequests.size() < MAX_OUTSTANDING_REQUESTS)
 				{
 					int i = choices.nextSetBit((int)(Math.random()*(choices.length())));
@@ -823,6 +847,7 @@ public class BitTortoise
 								break;
 							if(br.status == BlockRequest.UNASSIGNED)
 							{
+								BitTortoise.inProgress.set(i, true);
 								br.status = BlockRequest.UNREQUESTED;
 								p.sendRequests.add(br);
 							}
@@ -934,8 +959,29 @@ public class BitTortoise
 					BitSet betterChoices = (BitSet)choices.clone();
 					betterChoices.and(BitTortoise.inProgress);
 					
+					// Favor requests that have been completed:
 					// add block requests to a peer until it has its maximum outstanding requests
-					// it's totally random, which is better than linear, but not as good as rarest first
+					// it's almost totally random, which is better than linear, but not as good as rarest first
+					while(betterChoices.isEmpty() == false && p.sendRequests.size() < MAX_OUTSTANDING_REQUESTS)
+					{
+						int i = betterChoices.nextSetBit((int)(Math.random()*(betterChoices.length())));
+						if(i != -1)
+						{
+							for(BlockRequest br : outstandingPieces.get(i).blocks)
+							{
+								if(p.sendRequests.size() == MAX_OUTSTANDING_REQUESTS)
+									break;
+								if(br.status == BlockRequest.UNASSIGNED)
+								{
+									br.status = BlockRequest.UNREQUESTED;
+									p.sendRequests.add(br);
+								}
+							}
+							betterChoices.set(i, false);
+						}
+					}
+					
+					// If there are no better choices left, and our sendRequests list is not yet large enough to our liking:
 					while(choices.isEmpty() == false && p.sendRequests.size() < MAX_OUTSTANDING_REQUESTS)
 					{
 						int i = choices.nextSetBit((int)(Math.random()*(choices.length())));
@@ -947,6 +993,7 @@ public class BitTortoise
 									break;
 								if(br.status == BlockRequest.UNASSIGNED)
 								{
+									BitTortoise.inProgress.set(i, true);
 									br.status = BlockRequest.UNREQUESTED;
 									p.sendRequests.add(br);
 								}
@@ -1288,6 +1335,8 @@ public class BitTortoise
 					if (outstandingPieces.isEmpty()) {
 						System.out.println("received entire file... do something");
 					}
+					// The piece has been finished:
+					BitTortoise.inProgress.set(piece_index, false);
 				}
 				else {
 					//reset all blocks to empty and bytesread to 0
