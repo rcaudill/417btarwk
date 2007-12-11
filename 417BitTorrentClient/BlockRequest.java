@@ -4,11 +4,27 @@ public class BlockRequest {
 	public static final int REQUESTED = 0; // Incoming Block: we have requested, but not received any of it.
 	public static final int STARTED = 1; // Incoming Block: we have started receiving it.  Outgoing: unused.
 	public static final int FINISHED = 2; // Incoming Block: we have finished receiving it.  Outgoing: unused.
+	
+	BlockRequest next;
+	BlockRequest prev;
+	
 	int piece;
 	int offset;
 	int length;
 	int status; //0 is empty, 1 is started, 2 is finished
 	int bytesRead;
+
+	
+	
+	public BlockRequest(int piece, int offset, int length, BlockRequest prev, BlockRequest next) {
+		this.piece = piece;
+		this.offset = offset;
+		this.length = length;
+		bytesRead = 0;
+		status = UNASSIGNED;
+		this.prev = prev;
+		this.next = next;
+	}
 	
 	public BlockRequest(int piece, int offset, int length) {
 		this.piece = piece;
