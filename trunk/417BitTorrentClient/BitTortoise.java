@@ -761,7 +761,9 @@ public class BitTortoise
 			{
 				block = new byte[p.bytesLeft];
 				p.readBuffer.get(block, 0, p.bytesLeft);
-				p.readBuffer.clear();
+				p.readBuffer.position(p.bytesLeft);
+				p.readBuffer.compact();
+				p.readBuffer.position(0);
 				p.bytesLeft = 0;
 			}
 			else
@@ -1237,6 +1239,11 @@ public class BitTortoise
 					}
 				}
 			}
+			else
+			{
+				System.err.println("Disconnecting from peer - Received bad data");
+				return false;
+			}
 		}
 		
 		if(p.bytesLeft >= 0)
@@ -1290,27 +1297,36 @@ public class BitTortoise
 		if (p.blockRequest.bytesRead >= p.blockRequest.length) { //if done reading block
 			p.blockRequest.status = BlockRequest.FINISHED;
 			p.blockRequest = null; //this peer is open to receive a new block
-			if (outstandingPieces.get(piece_index).allFinished()) {
+			if (outstandingPieces.get(piece_index).allFinished())
+			{
 				byte [] entirePiece = new byte [torrentFile.piece_length]; //this is a HUGE array, is there a better way to do this?
 				byte [] mySHA1;
-				try {
-					destinationFile.seek(torrentFile.piece_length * piece_index);
+				try
+				{
+					destinationFile.seek(piece_index * torrentFile.piece_length);
 					destinationFile.read(entirePiece, 0, torrentFile.piece_length);
-				} catch (IOException e) {
+				}
+				catch(Exception e)
+				{
 					System.out.println("error reading in entire piece");
 					System.exit(1);
 				}
 				mySHA1 = SHA1Functions.getSha1Hash(entirePiece);
-				if (mySHA1.equals(torrentFile.piece_hash_values_as_binary.get(piece_index))) {
+				if (ByteBuffer.wrap(mySHA1).equals(ByteBuffer.wrap((byte[])torrentFile.piece_hash_values_as_binary.get(piece_index))))
+				{
 					outstandingPieces.remove(piece_index);
 					completedPieces.set(piece_index);
-					if (outstandingPieces.isEmpty()) {
+					if (outstandingPieces.isEmpty())
+					{
 						System.out.println("received entire file... do something");
 					}
 					// The piece has been finished:
 					BitTortoise.inProgress.set(piece_index, false);
+					BitTortoise.completedPieces.set(piece_index, true);
 				}
-				else {
+				else
+				{
+					System.err.println("Error!");
 					outstandingPieces.get(piece_index).resetAll();
 				}
 			}
