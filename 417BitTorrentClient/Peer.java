@@ -156,8 +156,12 @@ public class Peer
 		for(BlockRequest br : this.sendRequests)
 		{
 			if(br.status != BlockRequest.FINISHED)
+			{
 				br.status = BlockRequest.UNASSIGNED;
+				br.bytesRead = 0;
+			}
 		}
+		this.sendRequests.clear();
 	}
 	
 	/**
