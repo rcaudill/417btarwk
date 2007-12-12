@@ -21,7 +21,7 @@ import java.util.*;
 public class Peer
 {
 	// Constants:
-	public static final int BYTES_TO_ALLOCATE = 1024;
+	public static final int BYTES_TO_ALLOCATE = 8192;
 	private final String pstr = "BitTorrent protocol";
 	private final byte pstrlen = (byte)(pstr.length());
 	
@@ -128,7 +128,7 @@ public class Peer
 			s += this.peer_id[i];
 		}
 		isBitTortoisePeer = s.equals("-BT0001-");
-	
+		
 		
 		try
 		{
