@@ -21,7 +21,7 @@ import java.util.*;
 public class Peer
 {
 	// Constants:
-	private final int BYTES_TO_ALLOCATE = 1024;
+	public static final int BYTES_TO_ALLOCATE = 1024;
 	private final String pstr = "BitTorrent protocol";
 	private final byte pstrlen = (byte)(pstr.length());
 	
@@ -243,10 +243,12 @@ public class Peer
 				{
 					try
 					{
-						byte[] bytesToSend = MessageLibrary.getBitfieldMessage(BitTortoise.byteArrayFromBitSet(receivedPieces, receivedPieces.length()));
+						byte[] bytesToSend = MessageLibrary.getBitfieldMessage(BitTortoise.byteArrayFromBitSet(receivedPieces, BitTortoise.totalPieceCount));
 						this.sendBuffer = ByteBuffer.wrap(bytesToSend);
 						int sent = sc.write(this.sendBuffer);
 						this.unsent = bytesToSend.length - sent;
+						
+						this.advertisedPieces.and(receivedPieces);
 						
 						this.sent_bitfield = true;
 						
@@ -416,6 +418,11 @@ public class Peer
 								this.shouldCancel.add(br);
 							}
 						}
+					}
+					else if(this.am_interested && !this.peer_choking)
+					{
+						this.emptyFinishedRequests();
+						this.fill(receivedPieces, inProgress, outstandingPieces);
 					}
 					else if(!this.am_choking && this.receiveRequests.size() != 0)
 					{

@@ -32,6 +32,7 @@ public class BitTortoise
 	private static BitSet inProgress;
 	private static long lastTrackerCommunication;
 	
+	public static int totalPieceCount;
 	
 	/**
 	 * Usage: "java bittortoise <torrent_file> [<destination_file> [port]] [-v]" 
@@ -55,7 +56,7 @@ public class BitTortoise
 		Date finish;
 		
 		// State variables:
-		int totalPieceCount = 0;
+		totalPieceCount = 0;
 		Map<SocketChannel, Peer> activePeerMap = new HashMap<SocketChannel, Peer>();
 		Map<SocketChannel, Peer> pendingPeerMap = new HashMap<SocketChannel, Peer>();
 		
@@ -129,13 +130,53 @@ public class BitTortoise
 		completedPieces = new BitSet(totalPieceCount);
 		inProgress = new BitSet(totalPieceCount);
 		
-		/* initialize all block requests for transfer */
-		for (int i=0; i < totalPieceCount; i++) {
-			outstandingPieces.put(new Integer(i), new Piece(i));
-			outstandingPieces.get(i).addBlock(0 * block_length, block_length, null, null);
-			for (int j=1; j < torrentFile.piece_length / block_length; j++) {
-				BlockRequest prev = outstandingPieces.get(i).getBlock((j-1)* block_length);
-				BlockRequest justAdded = outstandingPieces.get(i).addBlock(j * block_length, block_length, prev, null);
+		// initialize all block requests for transfer:
+		for(int i=0; i < BitTortoise.totalPieceCount - 1; i++)
+		{
+			BitTortoise.outstandingPieces.put(new Integer(i), new Piece(i));
+			BitTortoise.outstandingPieces.get(i).addBlock(0 * BitTortoise.block_length, BitTortoise.block_length, null, null);
+			for(int j=1; j < torrentFile.piece_length / BitTortoise.block_length; j++)
+			{
+				BlockRequest prev = BitTortoise.outstandingPieces.get(i).getBlock((j-1)* BitTortoise.block_length);
+				BlockRequest justAdded = BitTortoise.outstandingPieces.get(i).addBlock(j * BitTortoise.block_length, BitTortoise.block_length, prev, null);
+				prev.next = justAdded;
+			}
+			if(torrentFile.piece_length % BitTortoise.block_length != 0)
+			{
+				int j = torrentFile.piece_length / block_length;
+				int k = torrentFile.piece_length % BitTortoise.block_length;
+				BlockRequest prev = BitTortoise.outstandingPieces.get(i).getBlock((j-1)* BitTortoise.block_length);
+				BlockRequest justAdded = BitTortoise.outstandingPieces.get(i).addBlock(j * BitTortoise.block_length, k, prev, null);
+				prev.next = justAdded;
+			}
+		}
+		// Fill the last piece with BlockRequest objects:
+		BitTortoise.outstandingPieces.put(new Integer(BitTortoise.totalPieceCount - 1), new Piece(BitTortoise.totalPieceCount - 1));
+		for(int j = 0; j < (torrentFile.file_length - (BitTortoise.totalPieceCount - 1) * torrentFile.piece_length) / BitTortoise.block_length; j++)
+		{
+			BlockRequest prev = null;
+			if(j != 0)
+			{
+				prev = BitTortoise.outstandingPieces.get(new Integer(BitTortoise.totalPieceCount - 1)).getBlock(j - 1);
+			}
+			
+			BlockRequest br = BitTortoise.outstandingPieces.get(BitTortoise.totalPieceCount - 1).addBlock(j, BitTortoise.block_length);
+			br.prev = prev;
+			
+			if(prev != null)
+			{
+				prev.next = br;
+			}
+		}
+		if((torrentFile.file_length - (BitTortoise.totalPieceCount - 1) * torrentFile.piece_length) % BitTortoise.block_length != 0)
+		{
+			int j = (torrentFile.file_length - (BitTortoise.totalPieceCount - 1) * torrentFile.piece_length) / BitTortoise.block_length;
+			int k = (torrentFile.file_length - (BitTortoise.totalPieceCount - 1) * torrentFile.piece_length) % BitTortoise.block_length;
+			BlockRequest prev = BitTortoise.outstandingPieces.get(BitTortoise.totalPieceCount - 1).getBlock((j-1)* BitTortoise.block_length);
+			BlockRequest justAdded = BitTortoise.outstandingPieces.get(BitTortoise.totalPieceCount - 1).addBlock(j * BitTortoise.block_length, k, prev, null);
+			
+			if(prev != null)
+			{
 				prev.next = justAdded;
 			}
 		}
@@ -1130,6 +1171,13 @@ public class BitTortoise
 					if(p.bytesLeft < length + 4)
 					{
 						cont = false;
+						if(length + 4 >= Peer.BYTES_TO_ALLOCATE)
+						{
+							p.bytesLeft = 0;
+							p.readBuffer.position(p.readBuffer.capacity());
+							p.readBuffer.compact();
+							p.readBuffer.position(0);
+						}
 					}
 					else
 					{
