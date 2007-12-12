@@ -22,7 +22,7 @@ public class BitTortoise
 {
 	public static boolean verbose = false;
 	
-	public static final int MAX_OUTSTANDING_REQUESTS = 5;
+	public static final int MAX_OUTSTANDING_REQUESTS = 100;
 	
 	private static TorrentFile torrentFile; // the object into which the .torrent file is b-decoded
 	private static RandomAccessFile destinationFile; // The file into which we are writing
@@ -58,6 +58,8 @@ public class BitTortoise
 		Date finish;
 		BitTortoise.continueSeeding = false;
 		BitTortoise.isIncomplete = true;
+		
+		long startTime = (new Date()).getTime();
 		
 		// State variables:
 		totalPieceCount = 0;
@@ -593,7 +595,7 @@ public class BitTortoise
 				select.selectedKeys().clear();
 				
 				// Check the number of connections, add more if needed
-				if(numConnections < 30 && peerList.size() > 0)
+				if(isIncomplete && numConnections < 30 && peerList.size() > 0)
 				{
 					boolean succeeded = false;
 					while(!succeeded)
@@ -657,7 +659,7 @@ public class BitTortoise
 						}
 					}
 				}
-				else if(numConnections < 30 && (new Date()).getTime() - tracker.min_interval * 1000 > BitTortoise.lastTrackerCommunication)
+				else if(isIncomplete && numConnections < 30 && (new Date()).getTime() - tracker.min_interval * 1000 > BitTortoise.lastTrackerCommunication)
 				{
 					HttpURLConnection tempConnection = (HttpURLConnection)(new URL(torrentFile.tracker_url + "?" +
 							"info_hash=" + torrentFile.info_hash_as_url + "&" +
@@ -677,6 +679,21 @@ public class BitTortoise
 					}
 					BitTortoise.lastTrackerCommunication = (new Date()).getTime();
 				}
+				
+				if(!isIncomplete)
+				{
+					for(Map.Entry<SocketChannel, Peer> ent : activePeerMap.entrySet())
+					{
+						try
+						{
+							ent.getKey().close();
+						}
+						catch(IOException e)
+						{
+							System.err.println("Error thrown while attempting to close SocketChannel - " + e.getMessage());
+						}
+					}
+				}
 			}
 		}
 		catch(IOException e)
@@ -684,7 +701,10 @@ public class BitTortoise
 			System.err.println("IOException Occurred! - " + e.getMessage());
 			System.exit(1);
 		}
+		
+		long timeTaken = (new Date()).getTime() - startTime;
 		System.out.println("Success!");
+		System.out.println("File received in " + timeTaken / 1000 + " seconds (overall rate: " + (BitTortoise.torrentFile.file_length / timeTaken) + " kB/s).");
 	}
 	
 	/**
@@ -1296,7 +1316,6 @@ public class BitTortoise
 					if (BitTortoise.outstandingPieces.isEmpty())
 					{
 						isIncomplete = false;
-						System.out.println("received entire file... do something");
 					}
 					// The piece has been finished:
 					BitTortoise.inProgress.set(piece_index, false);
