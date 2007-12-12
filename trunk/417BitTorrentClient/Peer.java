@@ -374,6 +374,9 @@ public class Peer
 						if(BitTortoise.verbose)
 							System.out.println("Cancel (" + br.piece + "," + br.offset + "," + br.length + ") message sent. (Peer " + this.ip + ":" + this.port + ")\n");
 						
+						br.bytesRead = 0;
+						br.status = BlockRequest.UNASSIGNED;
+						
 						this.sendRequests.remove(br);
 						this.shouldCancel.remove(0);
 						
