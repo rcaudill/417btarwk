@@ -51,15 +51,30 @@ public class BlockRequest
 		status = UNASSIGNED;
 	}
 	
-	public String toString() {
-		return "Piece: " + piece + " Offset: " + offset + " Length: " + length;
+	public String toString()
+	{
+		return "Piece: " + piece + " Offset: " + offset + " Length: " + length + " Status: " + status;
 	}
 	//void sendRequest(Peer p);
 	
+	/**
+	 * Used to write status to a file (in Resumer.java).
+	 * @return String representing the BlockRequest's piece, offset, length, and status.
+	 */
+	public String toPrintString()
+	{
+		return "Piece: " + piece + " Offset: " + offset + " Length: " + length + " Status: " + status;
+	}
+	
+	/**
+	 * Used to read BlockRequests in from a file (in Resumer.java), uses Regular Expressions.
+	 * @param s String to convert into a BlockRequest
+	 * @return BlockRequest representing the BlockRequest's piece, offset, length, and status.
+	 */
 	public static BlockRequest fromString(String s)
 	{ 
 		BlockRequest result = new BlockRequest();
-		String regex = "Piece: (-?[0-9]+) Offset: (-?[0-9]+) Length: (-?[0-9]+)";
+		String regex = "Piece: (-?[0-9]+) Offset: (-?[0-9]+) Length: (-?[0-9]+) Status: (-?[0-9])";
 		Pattern p = Pattern.compile(regex);
 		Matcher m = p.matcher(s);
 		if(m.matches())
@@ -67,6 +82,7 @@ public class BlockRequest
 			result.piece = Integer.parseInt(m.group(1));
 			result.offset = Integer.parseInt(m.group(2));
 			result.length = Integer.parseInt(m.group(3));
+			result.status = Integer.parseInt(m.group(4));
 			return result;
 		}
 		else

@@ -38,15 +38,26 @@ public class BitTortoise
 	private static boolean isIncomplete;
 	private static boolean continueSeeding;
 	private static boolean quitNotReceived;
+	private static boolean initialSeeding;
 	public static int totalPieceCount;
 	
 	/**
-	 * Usage: "java bittortoise <torrent_file> [<destination_file> [port]] [-v] [-s]" 
+	 * Usage: "java BitTortoise <torrent_file> [-d <destination_file>] [-p <port>] [-v] [-s] [-c] [-r <bit tortoise resume info file>]" 
+	 * -d means that you want the file to use the given filename
+	 * -p means that you want to use the given port
+	 * -v means that you want to run in verbose mode
+	 * -s means that you want to start out seeding
+	 * -c means that you want to continue seeding when done with the transfer
+	 * -r means that you want to use the given resume info file (and are resuming an incomplete download)
 	 * 
 	 * @param args
 	 */
 	public static void main(String args[])
 	{
+		// SECTION: Initialize variables:
+		
+		
+		
 		// Torrent file, tracker, argument, and other parsed variables:
 		int numConnections; // the number of TCP connections we currently have with other peers
 		int port; // the port we are listening on
@@ -60,11 +71,13 @@ public class BitTortoise
 		Tracker tracker = null;
 		Date start;
 		Date finish;
+		BitTortoise.initialSeeding = false;
 		BitTortoise.continueSeeding = false;
 		BitTortoise.isIncomplete = true;
 		BitTortoise.quitNotReceived = true;
 		BitTortoise.totalUploaded = 0;
 		BitTortoise.totalDownloaded = 0;
+		String resumeInfoFilename = null;
 		
 		long startTime = (new Date()).getTime();
 		
@@ -72,6 +85,16 @@ public class BitTortoise
 		totalPieceCount = 0;
 		Map<SocketChannel, Peer> activePeerMap = new HashMap<SocketChannel, Peer>();
 		Map<SocketChannel, Peer> pendingPeerMap = new HashMap<SocketChannel, Peer>();
+		
+		
+		
+		// END of SECTION: Initialize variables
+		
+		
+		
+		// SECTION: Generate Peer ID:
+		
+		
 		
 		// Generate a peer_id:
 		my_peer_id[0] = (byte)'-'; // Replace the beginning of the id with "-BT0001-" to mimic normal naming schemes 
@@ -85,32 +108,51 @@ public class BitTortoise
 		for(int i = 8; i < my_peer_id.length; i ++)
 			my_peer_id[i] = (byte)((Math.random() * 0x5F) + 0x20); // make sure these are printable characters (range from 0x20 to 0x7E)
 		
+		
+		
+		// END of SECTION: Generate Peer ID
+		
+		
+		
+		// SECTION: Parse command-line arguments:
+		
+		
+		
 		// Verify that the correct argument(s) were used:
-		if(args.length < 1 || args.length > 4)
+		if(args.length < 1 || args.length > 9)
 		{
-			System.err.println("Usage: java bittortoise <torrent_file> [-d <destination_file>] [-p <port>] [-v] [-s]");
+			System.err.println("Usage: java BitTortoise <torrent_file> [-d <destination_file>] [-p <port>] [-v] [-s] [-c] [-r <bit tortoise resume info file>]");
 			System.exit(1);
 		}
 		port = 6881; // default port is 6881
-		if(args.length == 3)
-			port = Integer.parseInt(args[2]);
 		
 		String destinationFileName = null;
 		
 		boolean destinationFileIsNext = false;
 		boolean portIsNext = false;
+		boolean resumeFileIsNext = false;
 		for(String arg : args)
 		{
 			if(arg.startsWith("-"))
 			{
 				if(arg.indexOf('v') != -1)
 					BitTortoise.verbose = true;
-				if(arg.indexOf('s') != -1)
+				if(arg.indexOf('c') != -1)
 					BitTortoise.continueSeeding = true;
+				if(arg.indexOf('c') != -1)
+					BitTortoise.initialSeeding = true;
 				if(arg.indexOf('p') != -1)
 					portIsNext = true;
 				if(arg.indexOf('d') != -1)
 					destinationFileIsNext = true;
+				if(arg.indexOf('r') != -1)
+					resumeFileIsNext = true;
+				
+				if((portIsNext && destinationFileIsNext) || (portIsNext && resumeFileIsNext) || (destinationFileIsNext && resumeFileIsNext))
+				{
+					System.err.println("java BitTortoise <torrent_file> [-d <destination_file>] [-p <port>] [-v] [-s] [-c] [-r <bit tortoise resume info file>]");
+					System.exit(1);
+				}
 			}
 			else
 			{
@@ -119,13 +161,28 @@ public class BitTortoise
 					port = Integer.parseInt(arg);
 					portIsNext = false;
 				}
-				else if(destinationFileIsNext)
+				if(destinationFileIsNext)
 				{
 					destinationFileName = arg;
 					destinationFileIsNext = false;
 				}
+				if(resumeFileIsNext)
+				{
+					resumeInfoFilename = arg;
+					resumeFileIsNext = false;
+				}
 			}
 		}
+		
+		
+		
+		// END of SECTION: Parse command-line arguments
+		
+		
+		
+		// SECTION: Parse torrent file:
+		
+		
 		
 		// Parse the torrent file.
 		torrentFile = new TorrentFile();
@@ -141,99 +198,22 @@ public class BitTortoise
 			System.exit(1);
 		}
 		
-		totalPieceCount = ((int)torrentFile.file_length/torrentFile.piece_length) + 1;
+		totalPieceCount = ((int)torrentFile.file_length/torrentFile.piece_length) + (((torrentFile.file_length % torrentFile.piece_length) == 0)? (0) : (1));
 		completedPieces = new BitSet(totalPieceCount);
 		inProgress = new BitSet(totalPieceCount);
-		
-		// initialize all block requests for transfer:
-		for(int i=0; i < BitTortoise.totalPieceCount - 1; i++)
-		{
-			BitTortoise.outstandingPieces.put(new Integer(i), new Piece(i));
-			BitTortoise.outstandingPieces.get(i).addBlock(0 * BitTortoise.block_length, BitTortoise.block_length, null, null);
-			for(int j=1; j < BitTortoise.torrentFile.piece_length / BitTortoise.block_length; j++)
-			{
-				BlockRequest prev = BitTortoise.outstandingPieces.get(i).getBlock((j-1)* BitTortoise.block_length);
-				BlockRequest justAdded = BitTortoise.outstandingPieces.get(i).addBlock(j * BitTortoise.block_length, BitTortoise.block_length, prev, null);
-				prev.next = justAdded;
-			}
-			if(BitTortoise.torrentFile.piece_length % BitTortoise.block_length != 0)
-			{
-				int j = BitTortoise.torrentFile.piece_length / block_length;
-				int k = BitTortoise.torrentFile.piece_length % BitTortoise.block_length;
-				BlockRequest prev = BitTortoise.outstandingPieces.get(i).getBlock((j-1)* BitTortoise.block_length);
-				BlockRequest justAdded = BitTortoise.outstandingPieces.get(i).addBlock(j * BitTortoise.block_length, k, prev, null);
-				prev.next = justAdded;
-			}
-		}
-		// Fill the last piece with BlockRequest objects:
-		BitTortoise.outstandingPieces.put(new Integer(BitTortoise.totalPieceCount - 1), new Piece(BitTortoise.totalPieceCount - 1));
-		for(int j = 0; j < (BitTortoise.torrentFile.file_length - (BitTortoise.totalPieceCount - 1) * BitTortoise.torrentFile.piece_length) / BitTortoise.block_length; j++)
-		{
-			BlockRequest prev = null;
-			if(j != 0)
-			{
-				prev = BitTortoise.outstandingPieces.get(new Integer(BitTortoise.totalPieceCount - 1)).getBlock((j - 1) * BitTortoise.block_length);
-			}
-			
-			BlockRequest br = BitTortoise.outstandingPieces.get(BitTortoise.totalPieceCount - 1).addBlock(j * BitTortoise.block_length, BitTortoise.block_length);
-			br.prev = prev;
-			
-			if(prev != null)
-			{
-				prev.next = br;
-			}
-		}
-		if((BitTortoise.torrentFile.file_length - (BitTortoise.totalPieceCount - 1) * BitTortoise.torrentFile.piece_length) % BitTortoise.block_length != 0)
-		{
-			int j = (BitTortoise.torrentFile.file_length - (BitTortoise.totalPieceCount - 1) * BitTortoise.torrentFile.piece_length) / BitTortoise.block_length;
-			int k = (BitTortoise.torrentFile.file_length - (BitTortoise.totalPieceCount - 1) * BitTortoise.torrentFile.piece_length) % BitTortoise.block_length;
-			BlockRequest prev = BitTortoise.outstandingPieces.get(BitTortoise.totalPieceCount - 1).getBlock((j-1)* BitTortoise.block_length);
-			BlockRequest justAdded = BitTortoise.outstandingPieces.get(BitTortoise.totalPieceCount - 1).addBlock(j * BitTortoise.block_length, k, prev, null);
-			
-			if(prev != null)
-			{
-				prev.next = justAdded;
-			}
-		}
 		
 		if(BitTortoise.verbose)
 			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Finished parsing torrent file.");
 		
-		// Extract a list of peers, and other information from the tracker:
-		peerList = new LinkedList<Peer>(); // List of peer objects (uses Generics)
-		interval = 0; // seconds the client should wait before sending a regular request to the tracker
-		min_interval = 0; // seconds the client must wait before sending a regular request to the tracker
-		tracker_id = ""; // a string to send back on next announcements
-		complete = 0; // number of seeders/peers with the entire file
-		incomplete = 0; // number of leechers/peers providing 0+ parts of the file (but are not seeders)
-		try
-		{
-			tracker = new Tracker(BitTortoise.torrentFile);
-
-			// Using the parsed torrent file, ping the tracker and get a list of peers to connect to:
-			HttpURLConnection connection = (HttpURLConnection)(new URL(BitTortoise.torrentFile.tracker_url + "?" +
-					"info_hash=" + BitTortoise.torrentFile.info_hash_as_url + "&" +
-					"downloaded=0" + "&" +
-					"uploaded=0" + "&" +
-					"left=" + BitTortoise.torrentFile.file_length + "&" +
-					"peer_id=" + TorrentFileHandler.byteArrayToURLString(my_peer_id) + "&" +
-					"event=started" + "&" +
-					"port=" + port).openConnection());
-			tracker.connect(connection, my_peer_id);
-			peerList = tracker.peerList;
-			BitTortoise.lastTrackerCommunication = (new Date()).getTime();
-		}
-		catch (UnknownHostException e)
-		{
-			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Tracker is an unknown host: " + e.getMessage());
-		}
-		catch (IOException e) 
-		{
-			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Error connecting to or reading from Tracker: " + e.getMessage());
-		}
-
-		if(BitTortoise.verbose)
-			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Finished parsing tracker results.");
+		
+		
+		// END of SECTION: Parse torrent file
+		
+		
+		
+		// SECTION: Create destination file:
+		
+		
 		
 		// Create the destination file:
 		try
@@ -249,8 +229,12 @@ public class BitTortoise
 				// Ex. "testTorrentFile.txt.torrent" -> "testTorrentFile.txt"
 				BitTortoise.destinationFile = new RandomAccessFile(args[0].substring(0,args[0].lastIndexOf(".torrent")), "rw");
 			}
+			
 			// Set the file to the total length of the file:
-			BitTortoise.destinationFile.setLength(torrentFile.file_length);
+			if(!BitTortoise.initialSeeding && resumeInfoFilename == null)
+			{
+				BitTortoise.destinationFile.setLength(torrentFile.file_length);
+			}
 		}
 		catch(IOException e)
 		{
@@ -260,6 +244,164 @@ public class BitTortoise
 		
 		if(BitTortoise.verbose)
 			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Finished creating destination file.");
+		
+		
+		
+		// END of SECTION: Create destination file
+		
+		
+		
+		// SECTION: fill outstandingPieces map with pieces that need to be finished:
+		
+		
+		
+		// If this is not a resume or a seeding attempt, fill the blocks in:
+		if(!BitTortoise.initialSeeding && resumeInfoFilename == null)
+		{
+			// initialize all block requests for transfer:
+			for(int i=0; i < BitTortoise.totalPieceCount - 1; i++)
+			{
+				BitTortoise.outstandingPieces.put(new Integer(i), new Piece(i));
+				BitTortoise.outstandingPieces.get(i).addBlock(0 * BitTortoise.block_length, BitTortoise.block_length, null, null);
+				for(int j=1; j < BitTortoise.torrentFile.piece_length / BitTortoise.block_length; j++)
+				{
+					BlockRequest prev = BitTortoise.outstandingPieces.get(i).getBlock((j-1)* BitTortoise.block_length);
+					BlockRequest justAdded = BitTortoise.outstandingPieces.get(i).addBlock(j * BitTortoise.block_length, BitTortoise.block_length, prev, null);
+					prev.next = justAdded;
+				}
+				if(BitTortoise.torrentFile.piece_length % BitTortoise.block_length != 0)
+				{
+					int j = BitTortoise.torrentFile.piece_length / block_length;
+					int k = BitTortoise.torrentFile.piece_length % BitTortoise.block_length;
+					BlockRequest prev = BitTortoise.outstandingPieces.get(i).getBlock((j-1)* BitTortoise.block_length);
+					BlockRequest justAdded = BitTortoise.outstandingPieces.get(i).addBlock(j * BitTortoise.block_length, k, prev, null);
+					prev.next = justAdded;
+				}
+			}
+			// Fill the last piece with BlockRequest objects:
+			BitTortoise.outstandingPieces.put(new Integer(BitTortoise.totalPieceCount - 1), new Piece(BitTortoise.totalPieceCount - 1));
+			for(int j = 0; j < (BitTortoise.torrentFile.file_length - (BitTortoise.totalPieceCount - 1) * BitTortoise.torrentFile.piece_length) / BitTortoise.block_length; j++)
+			{
+				BlockRequest prev = null;
+				if(j != 0)
+				{
+					prev = BitTortoise.outstandingPieces.get(new Integer(BitTortoise.totalPieceCount - 1)).getBlock((j - 1) * BitTortoise.block_length);
+				}
+				
+				BlockRequest br = BitTortoise.outstandingPieces.get(BitTortoise.totalPieceCount - 1).addBlock(j * BitTortoise.block_length, BitTortoise.block_length);
+				br.prev = prev;
+				
+				if(prev != null)
+				{
+					prev.next = br;
+				}
+			}
+			if((BitTortoise.torrentFile.file_length - (BitTortoise.totalPieceCount - 1) * BitTortoise.torrentFile.piece_length) % BitTortoise.block_length != 0)
+			{
+				int j = (BitTortoise.torrentFile.file_length - (BitTortoise.totalPieceCount - 1) * BitTortoise.torrentFile.piece_length) / BitTortoise.block_length;
+				int k = (BitTortoise.torrentFile.file_length - (BitTortoise.totalPieceCount - 1) * BitTortoise.torrentFile.piece_length) % BitTortoise.block_length;
+				BlockRequest prev = BitTortoise.outstandingPieces.get(BitTortoise.totalPieceCount - 1).getBlock((j-1)* BitTortoise.block_length);
+				BlockRequest justAdded = BitTortoise.outstandingPieces.get(BitTortoise.totalPieceCount - 1).addBlock(j * BitTortoise.block_length, k, prev, null);
+				
+				if(prev != null)
+				{
+					prev.next = justAdded;
+				}
+			}
+			
+			if(BitTortoise.verbose)
+				System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Finished filling map of Block Requests.");
+		}
+		else
+		{
+			// Do resuming/seeding checks, and resume/seed if necessary
+			if(resumeInfoFilename != null)
+			{
+				if(!Resumer.resumeFromStopped(resumeInfoFilename, destinationFile, BitTortoise.torrentFile, BitTortoise.outstandingPieces, BitTortoise.completedPieces, BitTortoise.inProgress, BitTortoise.totalPieceCount))
+				{
+					System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Could not resume from the given file.");
+					System.exit(1);
+				}
+				else
+				{
+					if(BitTortoise.verbose)
+						System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Resumed from the given file...");
+				}
+			}
+			if(BitTortoise.initialSeeding)
+			{
+				if(!Resumer.checkSeed(destinationFile, BitTortoise.torrentFile))
+				{
+					System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Seed file failed SHA1 hash check.");
+					System.exit(1);
+				}
+				else
+				{
+					if(BitTortoise.verbose)
+						System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Seed file parsed.");
+				}
+			}
+		}
+		
+		
+		
+		// END of SECTION: fill outstandingPieces map with pieces that need to be finished
+		
+		
+		
+		// SECTION: main loop:
+		
+		
+		
+		// Extract a list of peers, and other information from the tracker:
+		peerList = new LinkedList<Peer>(); // List of peer objects
+		interval = 0; // seconds the client should wait before sending a regular request to the tracker
+		min_interval = 0; // seconds the client must wait before sending a regular request to the tracker
+		tracker_id = ""; // a string to send back on next announcements
+		complete = 0; // number of seeders/peers with the entire file
+		incomplete = 0; // number of leechers/peers providing 0+ parts of the file (but are not seeders)
+		try
+		{
+			tracker = new Tracker(BitTortoise.torrentFile);
+
+			// Using the parsed torrent file, ping the tracker and get a list of peers to connect to:
+			String connectionString = BitTortoise.torrentFile.tracker_url + "?" +
+						"info_hash=" + BitTortoise.torrentFile.info_hash_as_url + "&";
+			
+			// Advertise to tracker differently if we are starting out seeding versus leeching 
+			if(BitTortoise.initialSeeding)
+			{
+				connectionString += "downloaded=" + BitTortoise.torrentFile.file_length + "&" +
+						"uploaded=0" + "&" +
+						"left=0" + "&";
+			}
+			else
+			{
+				connectionString += "downloaded=0" + "&" +
+						"uploaded=0" + "&" +
+						"left=" + BitTortoise.torrentFile.file_length + "&";
+			}
+			
+			connectionString += "peer_id=" + TorrentFileHandler.byteArrayToURLString(my_peer_id) + "&" +
+						"event=started" + "&" +
+						"port=" + port;
+			
+			HttpURLConnection connection = (HttpURLConnection)(new URL(connectionString).openConnection());
+			tracker.connect(connection, my_peer_id);
+			peerList = tracker.peerList;
+			BitTortoise.lastTrackerCommunication = (new Date()).getTime();
+		}
+		catch (UnknownHostException e)
+		{
+			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Tracker is an unknown host: " + e.getMessage());
+		}
+		catch (IOException e) 
+		{
+			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Error connecting to or reading from Tracker: " + e.getMessage());
+		}
+
+		if(BitTortoise.verbose)
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Finished parsing tracker results.");
 		
 		// Start the main loop of the client - choose and connect to peers, accept connections from peers, attempt to get all of the file
 		numConnections = 0;
@@ -737,36 +879,83 @@ public class BitTortoise
 			System.exit(1);
 		}
 		
+		
+		
+		// END of SECTION: main loop
+		
+		
+		
+		// SECTION: Cleanup:
+		
+		
+		
 		long timeTaken = (new Date()).getTime() - startTime;
 		
-		try
+		if(!BitTortoise.isIncomplete)
 		{
-			HttpURLConnection tempConnection = (HttpURLConnection)(new URL(torrentFile.tracker_url + "?" +
-					"info_hash=" + torrentFile.info_hash_as_url + "&" +
-					"downloaded=" + BitTortoise.totalDownloaded + "&" +
-					"uploaded=" + BitTortoise.totalUploaded + "&" +
-					"left=" + torrentFile.file_length + "&" +
-					"event=completed" + "&" +
-					"peer_id=" + TorrentFileHandler.byteArrayToURLString(my_peer_id) + "&" +
-					((tracker.tracker_id == null)? ("") : ("tracker_id=" + tracker.tracker_id + "&")) +
-					"port=" + port).openConnection());
+			try
+			{
+				HttpURLConnection tempConnection = (HttpURLConnection)(new URL(torrentFile.tracker_url + "?" +
+						"info_hash=" + torrentFile.info_hash_as_url + "&" +
+						"downloaded=" + BitTortoise.totalDownloaded + "&" +
+						"uploaded=" + BitTortoise.totalUploaded + "&" +
+						"left=" + torrentFile.file_length + "&" +
+						"event=completed" + "&" +
+						"peer_id=" + TorrentFileHandler.byteArrayToURLString(my_peer_id) + "&" +
+						((tracker.tracker_id == null)? ("") : ("tracker_id=" + tracker.tracker_id + "&")) +
+						"port=" + port).openConnection());
+				
+				tracker.connect(tempConnection,my_peer_id);
+			}
+			catch(IOException e)
+			{
+				System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Unable to alert tracker that this download has completed.");
+			}
 			
-			tracker.connect(tempConnection,my_peer_id);
-		}
-		catch(IOException e)
-		{
-			System.err.println("Unable to alert tracker that this download has completed.");
-		}
-		
-		if(BitTortoise.quitNotReceived)
-		{
 			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Success!");
-			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": File received in " + timeTaken / 1000 + " seconds (overall rate: " + (BitTortoise.torrentFile.file_length / timeTaken) + " kB/s).");
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": File received in " + timeTaken / 1000 + " seconds (overall rate: " + ((((double)BitTortoise.torrentFile.file_length) / ((double)timeTaken)) * (((double)1000.0) / ((double)1024.0))) + " kB/s).");
+		}
+		else if(!BitTortoise.quitNotReceived)
+		{
+			try
+			{
+				HttpURLConnection tempConnection = (HttpURLConnection)(new URL(torrentFile.tracker_url + "?" +
+						"info_hash=" + torrentFile.info_hash_as_url + "&" +
+						"downloaded=" + BitTortoise.totalDownloaded + "&" +
+						"uploaded=" + BitTortoise.totalUploaded + "&" +
+						"left=" + torrentFile.file_length + "&" +
+						"event=stopped" + "&" +
+						"peer_id=" + TorrentFileHandler.byteArrayToURLString(my_peer_id) + "&" +
+						((tracker.tracker_id == null)? ("") : ("tracker_id=" + tracker.tracker_id + "&")) +
+						"port=" + port).openConnection());
+				
+				tracker.connect(tempConnection,my_peer_id);
+			}
+			catch(IOException e)
+			{
+				System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Unable to alert tracker that this download has stopped.");
+			}
+			
+			// Attempt to save the current status to resume from:
+			if(Resumer.saveStatus(destinationFileName + ".btri", BitTortoise.outstandingPieces))
+			{
+				System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Resume file saved as " + destinationFileName + ".btri" + " .");
+			}
+			else
+			{
+				System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Could not make resume file!");
+			}
+			
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": User quit before file completion.");
 		}
 		else
 		{
-			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": User quit before file completion.");
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": What happen?  Somebody set up us the bomb.");
 		}
+		
+		
+		
+		// END of SECTION: Cleanup
 	}
 	
 	/**
@@ -931,7 +1120,7 @@ public class BitTortoise
 			}
 		}
 		
-		if(!p.handshake_received )
+		if(!p.handshake_received)
 		{
 			if(p.bytesLeft >= 68 && BitTortoise.isHandshakeMessage(p.readBuffer))
 			{

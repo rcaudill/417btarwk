@@ -88,8 +88,6 @@ public class HelloWorld {
 		{
 			System.out.println("no match");
 		}
-		
-		System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())));
 	}
 	
 	public static boolean checkEquality(String filename1, String filename2)
