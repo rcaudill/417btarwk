@@ -349,7 +349,7 @@ public class BitTortoise
 		
 		
 		
-		// SECTION: main loop:
+		// SECTION: connect to tracker:
 		
 		
 		
@@ -402,6 +402,16 @@ public class BitTortoise
 
 		if(BitTortoise.verbose)
 			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Finished parsing tracker results.");
+		
+		
+		
+		// END of SECTION: connect to tracker
+		
+		
+		
+		// SECTION: main loop:
+		
+		
 		
 		// Start the main loop of the client - choose and connect to peers, accept connections from peers, attempt to get all of the file
 		numConnections = 0;
