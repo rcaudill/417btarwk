@@ -9,7 +9,7 @@ public class TestClient {
         BufferedReader in = null;
 
         try {
-            echoSocket = new Socket("taranis", 7);
+            echoSocket = new Socket(InetAddress.getByAddress(new byte[]{(byte)129, 2, (byte)134, 58}), 4444);
             out = new PrintWriter(echoSocket.getOutputStream(), true);
             in = new BufferedReader(new InputStreamReader(
                                         echoSocket.getInputStream()));

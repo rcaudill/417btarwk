@@ -74,8 +74,8 @@ public class HelloWorld {
 		
 		System.out.println(new String(my_peer_id));*/
 		
-		//checkEquality("wrar361.2.exe","wrar361.2.exe");
-		
+		checkEquality("vlc-0.8.6b-win32.exe","vlc-0.8.6b-win321.exe");
+/*		
 		String s = "Piece: 25 Offset: 30026 Length: 173656";
 		String regex = "Piece: (-?[0-9]+) Offset: (-?[0-9]+) Length: (-?[0-9]+)";
 		Pattern p = Pattern.compile(regex);
@@ -87,7 +87,7 @@ public class HelloWorld {
 		else
 		{
 			System.out.println("no match");
-		}
+		}*/
 	}
 	
 	public static boolean checkEquality(String filename1, String filename2)

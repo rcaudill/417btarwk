@@ -498,7 +498,7 @@ public class Peer
 								this.lastMessageSentTime = (new Date()).getTime();
 								
 								if(BitTortoise.verbose)
-									System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + this.ip + ":" + this.port + "): Sent Have (" + Integer.toHexString(toSend) + ") message.");
+									System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + this.ip + ":" + this.port + "): Sent Have (" + toSend + ") message.");
 							}
 							catch(IOException e)
 							{

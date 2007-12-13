@@ -12,7 +12,8 @@ public class Resumer
 		// Load all of the unfinished block requests from the file:
 		try
 		{
-			RandomAccessFile resumeFile = new RandomAccessFile(resumeInfoFilename, "rw");
+			File file = new File(resumeInfoFilename);
+			RandomAccessFile resumeFile = new RandomAccessFile(file, "rw");
 			
 			if(resumeFile.length() == 0)
 				return false;
@@ -46,11 +47,16 @@ public class Resumer
 				
 				completed.set(br.piece, false);
 			}
+			
+			resumeFile.setLength(0);
+			resumeFile.close();
+			file.delete();
 		}
 		catch(IOException e)
 		{
 			return false;
 		}
+		catch(SecurityException e) { }
 		
 		// Load all of the finished pieces (ones not in the map) from the destination file, check their hashes:
 		try
@@ -67,6 +73,7 @@ public class Resumer
 				{
 					return false;
 				}
+				i++;
 			}
 		}
 		catch(IOException e)
@@ -92,9 +99,11 @@ public class Resumer
 				Piece piece = (Piece)entry.getValue();
 				for(BlockRequest br : piece.blocks)
 				{
-					resumeFile.writeChars(br.toPrintString() + endOfLine);
+					resumeFile.writeBytes(br.toPrintString() + endOfLine);
 				}
 			}
+			
+			resumeFile.close();
 		}
 		catch(IOException e)
 		{
