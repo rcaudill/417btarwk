@@ -1,6 +1,9 @@
 import java.io.RandomAccessFile;
 import java.nio.*;
 import java.nio.channels.*;
+import java.util.regex.*;
+import java.util.*;
+import java.text.*;
 
 
 public class HelloWorld {
@@ -71,7 +74,22 @@ public class HelloWorld {
 		
 		System.out.println(new String(my_peer_id));*/
 		
-		checkEquality("wrar361.2.exe","wrar361.2.exe");
+		//checkEquality("wrar361.2.exe","wrar361.2.exe");
+		
+		String s = "Piece: 25 Offset: 30026 Length: 173656";
+		String regex = "Piece: (-?[0-9]+) Offset: (-?[0-9]+) Length: (-?[0-9]+)";
+		Pattern p = Pattern.compile(regex);
+		Matcher m = p.matcher(s);
+		if(m.matches())
+		{
+			System.out.println(""+ Integer.parseInt(m.group(1)) + " "+Integer.parseInt(m.group(2))+" "+Integer.parseInt(m.group(3)));
+		}
+		else
+		{
+			System.out.println("no match");
+		}
+		
+		System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())));
 	}
 	
 	public static boolean checkEquality(String filename1, String filename2)

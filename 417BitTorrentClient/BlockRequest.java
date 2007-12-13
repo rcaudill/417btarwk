@@ -1,4 +1,5 @@
 import java.util.*;
+import java.util.regex.*;
 
 public class BlockRequest
 {
@@ -13,13 +14,23 @@ public class BlockRequest
 	BlockRequest next;
 	BlockRequest prev;
 	
-	int piece;
-	int offset;
-	int length;
+	int piece; // This should always be non-negative
+	int offset; // This should always be non-negative
+	int length; // This should always be non-negative
 	int status; //0 is empty, 1 is started, 2 is finished
-	int bytesRead;
+	int bytesRead; // This should always be non-negative
 	
-	
+	private BlockRequest()
+	{
+		this.piece = -1;
+		this.offset = -1;
+		this.length = -1;
+		bytesRead = 0;
+		status = UNASSIGNED;
+		this.prev = null;
+		this.next = null;
+		this.timeModified = (new Date()).getTime();
+	}
 	
 	public BlockRequest(int piece, int offset, int length, BlockRequest prev, BlockRequest next) {
 		this.piece = piece;
@@ -41,9 +52,27 @@ public class BlockRequest
 	}
 	
 	public String toString() {
-		return "Block: " + piece + " offset: " + offset;
+		return "Piece: " + piece + " Offset: " + offset + " Length: " + length;
 	}
 	//void sendRequest(Peer p);
 	
+	public static BlockRequest fromString(String s)
+	{ 
+		BlockRequest result = new BlockRequest();
+		String regex = "Piece: (-?[0-9]+) Offset: (-?[0-9]+) Length: (-?[0-9]+)";
+		Pattern p = Pattern.compile(regex);
+		Matcher m = p.matcher(s);
+		if(m.matches())
+		{
+			result.piece = Integer.parseInt(m.group(1));
+			result.offset = Integer.parseInt(m.group(2));
+			result.length = Integer.parseInt(m.group(3));
+			return result;
+		}
+		else
+		{
+			return null;
+		}
+	}
 }
 

@@ -2,6 +2,7 @@ import java.nio.*;
 import java.nio.channels.*;
 import java.io.*;
 import java.util.*;
+import java.text.*;
 
 /**
  * 
@@ -119,7 +120,7 @@ public class Peer
 		}
 		catch(Exception e)
 		{
-			System.err.println("Failed to initialze peer. Check for variable size overflow");
+			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Failed to initialze peer. Check for variable size overflow");
 			System.exit(1);
 		}
 		
@@ -143,7 +144,7 @@ public class Peer
 		}
 		catch(Exception e)
 		{
-			System.err.println("Failed to create peer handshake.");
+			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Failed to create peer handshake.");
 			System.exit(1);
 		}
 	}
@@ -228,8 +229,8 @@ public class Peer
 				
 				this.lastMessageSentTime = (new Date()).getTime();
 				
-				if(BitTortoise.verbose)
-					System.out.println("Continuation message sent. (Peer " + this.ip + ":" + this.port + ")\n");
+//				if(BitTortoise.verbose)
+//					System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + this.ip + ":" + this.port + "): Sent Continuation message.");
 			}
 			catch(IOException e)
 			{
@@ -259,7 +260,7 @@ public class Peer
 						this.lastMessageSentTime = (new Date()).getTime();
 						
 						if(BitTortoise.verbose)
-							System.out.println("Bitfield message sent. (Peer " + this.ip + ":" + this.port + ")\n");
+							System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + this.ip + ":" + this.port + "): Sent Bitfield message.");
 					}
 					catch(IOException e)
 					{
@@ -281,7 +282,7 @@ public class Peer
 							this.lastMessageSentTime = (new Date()).getTime();
 							
 							if(BitTortoise.verbose)
-								System.out.println("Choke message sent. (Peer " + this.ip + ":" + this.port + ")\n");
+								System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + this.ip + ":" + this.port + "): Sent Choke message.");
 						}
 						catch(IOException e)
 						{
@@ -301,7 +302,7 @@ public class Peer
 							this.lastMessageSentTime = (new Date()).getTime();
 							
 							if(BitTortoise.verbose)
-								System.out.println("Unchoke message sent. (Peer " + this.ip + ":" + this.port + ")\n");
+								System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + this.ip + ":" + this.port + "): Sent Unchoke message.");
 						}
 						catch(IOException e)
 						{
@@ -327,7 +328,7 @@ public class Peer
 							this.lastMessageSentTime = (new Date()).getTime();
 							
 							if(BitTortoise.verbose)
-								System.out.println("Interested message sent. (Peer " + this.ip + ":" + this.port + ")\n");
+								System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + this.ip + ":" + this.port + "): Sent Interested message.");
 						}
 						catch(IOException e)
 						{
@@ -347,7 +348,7 @@ public class Peer
 							this.lastMessageSentTime = (new Date()).getTime();
 							
 							if(BitTortoise.verbose)
-								System.out.println("Not Interested message sent. (Peer " + this.ip + ":" + this.port + ")\n");
+								System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + this.ip + ":" + this.port + "): Sent Not Interested message.");
 						}
 						catch(IOException e)
 						{
@@ -372,7 +373,7 @@ public class Peer
 						this.lastMessageSentTime = (new Date()).getTime();
 						
 						if(BitTortoise.verbose)
-							System.out.println("Cancel (" + br.piece + "," + br.offset + "," + br.length + ") message sent. (Peer " + this.ip + ":" + this.port + ")\n");
+							System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + this.ip + ":" + this.port + "): Sent Cancel (" + br.piece + "," + br.offset + "," + br.length + ") message.");
 						
 						br.bytesRead = 0;
 						br.status = BlockRequest.UNASSIGNED;
@@ -411,7 +412,7 @@ public class Peer
 									this.lastMessageSentTime = (new Date()).getTime();
 									
 									if(BitTortoise.verbose)
-										System.out.println("Request (" + br.piece + "," + br.offset + "," + br.length + ") message sent. (Peer " + this.ip + ":" + this.port + ")\n");
+										System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + this.ip + ":" + this.port + "): Sent Request (" + br.piece + "," + br.offset + "," + br.length + ") message.");
 								}
 								catch(IOException e)
 								{
@@ -425,11 +426,6 @@ public class Peer
 								this.shouldCancel.add(br);
 							}
 						}
-					}
-					else if(this.am_interested && !this.peer_choking)
-					{
-						this.emptyFinishedRequests();
-						this.fill(receivedPieces, inProgress, outstandingPieces);
 					}
 					else if(!this.am_choking && this.receiveRequests.size() != 0)
 					{
@@ -456,7 +452,7 @@ public class Peer
 							}
 							
 							if(BitTortoise.verbose)
-								System.out.println("Piece (" + br.piece + "," + br.offset + "," + br.length + ") message sent. (Peer " + this.ip + ":" + this.port + ")\n");
+								System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + this.ip + ":" + this.port + "): Sent Piece (" + br.piece + "," + br.offset + "," + br.length + ") message.");
 						}
 						catch(IOException e)
 						{
@@ -465,6 +461,11 @@ public class Peer
 					}
 					else
 					{
+						if(this.am_interested && !this.peer_choking)
+						{
+							this.emptyFinishedRequests();
+							this.fill(receivedPieces, inProgress, outstandingPieces);
+						}
 						// Advertise new blocks that we have gotten
 						BitSet newPiecesToAdvertise = (BitSet)receivedPieces.clone();
 						newPiecesToAdvertise.andNot(this.advertisedPieces);
@@ -497,7 +498,7 @@ public class Peer
 								this.lastMessageSentTime = (new Date()).getTime();
 								
 								if(BitTortoise.verbose)
-									System.out.println("Have (" + Integer.toHexString(toSend) + ") message sent. (Peer " + this.ip + ":" + this.port + ")\n");
+									System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + this.ip + ":" + this.port + "): Sent Have (" + Integer.toHexString(toSend) + ") message.");
 							}
 							catch(IOException e)
 							{
@@ -527,7 +528,7 @@ public class Peer
 								this.lastMessageSentTime = (new Date()).getTime();
 								
 								if(BitTortoise.verbose)
-									System.out.println("Keep-alive message sent. (Peer " + this.ip + ":" + this.port + ")\n");
+									System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + this.ip + ":" + this.port + "): Sent Keep-alive message.");
 							}
 							catch(IOException e)
 							{
@@ -552,7 +553,7 @@ public class Peer
 					this.handshake_sent = true;
 					
 					if(BitTortoise.verbose)
-						System.out.println("Handshake message sent. (Peer " + this.ip + ":" + this.port + ")\n");
+						System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + this.ip + ":" + this.port + "): Sent Handshake message.");
 				}
 				catch(IOException e)
 				{

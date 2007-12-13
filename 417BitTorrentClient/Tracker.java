@@ -20,8 +20,8 @@ public class Tracker {
 	
 	public Tracker(TorrentFile torrentFile){
 		peerList = new LinkedList<Peer>();
-		min_interval = 0;
-		tracker_id = "";
+		min_interval = 5;
+		tracker_id = null;
 		complete = 0;
 		incomplete = 0;
 		this.torrentFile = torrentFile;

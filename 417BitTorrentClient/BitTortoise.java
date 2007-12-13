@@ -17,6 +17,7 @@ import java.net.*;
 import java.util.*;
 import java.nio.*;
 import java.nio.channels.*;
+import java.text.*;
 
 public class BitTortoise
 {
@@ -31,9 +32,12 @@ public class BitTortoise
 	private static BitSet completedPieces; // Whether the Pieces/blocks of the file are completed or not
 	private static BitSet inProgress;
 	private static long lastTrackerCommunication;
+	private static long totalUploaded;
+	private static long totalDownloaded;
 	
 	private static boolean isIncomplete;
 	private static boolean continueSeeding;
+	private static boolean quitNotReceived;
 	public static int totalPieceCount;
 	
 	/**
@@ -58,6 +62,9 @@ public class BitTortoise
 		Date finish;
 		BitTortoise.continueSeeding = false;
 		BitTortoise.isIncomplete = true;
+		BitTortoise.quitNotReceived = true;
+		BitTortoise.totalUploaded = 0;
+		BitTortoise.totalDownloaded = 0;
 		
 		long startTime = (new Date()).getTime();
 		
@@ -130,7 +137,7 @@ public class BitTortoise
 		}
 		catch(Exception e)
 		{
-			System.out.println("The provided file was not of the appropriate format, or could not be read.");
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": The provided file was not of the appropriate format, or could not be read.");
 			System.exit(1);
 		}
 		
@@ -190,7 +197,7 @@ public class BitTortoise
 		}
 		
 		if(BitTortoise.verbose)
-			System.out.println("Finished parsing torrent file.");
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Finished parsing torrent file.");
 		
 		// Extract a list of peers, and other information from the tracker:
 		peerList = new LinkedList<Peer>(); // List of peer objects (uses Generics)
@@ -210,6 +217,7 @@ public class BitTortoise
 					"uploaded=0" + "&" +
 					"left=" + BitTortoise.torrentFile.file_length + "&" +
 					"peer_id=" + TorrentFileHandler.byteArrayToURLString(my_peer_id) + "&" +
+					"event=started" + "&" +
 					"port=" + port).openConnection());
 			tracker.connect(connection, my_peer_id);
 			peerList = tracker.peerList;
@@ -217,15 +225,15 @@ public class BitTortoise
 		}
 		catch (UnknownHostException e)
 		{
-			System.err.println("Tracker is an unknown host: " + e.getMessage());
+			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Tracker is an unknown host: " + e.getMessage());
 		}
 		catch (IOException e) 
 		{
-			System.err.println("Error connecting to or reading from Tracker: " + e.getMessage());
+			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Error connecting to or reading from Tracker: " + e.getMessage());
 		}
 
 		if(BitTortoise.verbose)
-			System.out.println("Finished parsing tracker results.");
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Finished parsing tracker results.");
 		
 		// Create the destination file:
 		try
@@ -246,12 +254,12 @@ public class BitTortoise
 		}
 		catch(IOException e)
 		{
-			System.err.println("Error creating file: " + e.getMessage());
+			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Error creating file: " + e.getMessage());
 			System.exit(1);
 		}
 		
 		if(BitTortoise.verbose)
-			System.out.println("Finished creating destination file.");
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Finished creating destination file.");
 		
 		// Start the main loop of the client - choose and connect to peers, accept connections from peers, attempt to get all of the file
 		numConnections = 0;
@@ -272,8 +280,20 @@ public class BitTortoise
 			
 			// Main Data processing loop:
 			start = new Date();
-			while(BitTortoise.isIncomplete || BitTortoise.continueSeeding)
+			while((BitTortoise.isIncomplete || BitTortoise.continueSeeding) && quitNotReceived)
 			{
+				int commandLength = System.in.available();
+				if(commandLength != 0)
+				{
+					byte[] read = new byte[commandLength];
+					System.in.read(read, 0, commandLength);
+					if(read[0] == 'q')
+					{
+						quitNotReceived = false;
+						break;
+					}
+				}
+				
 				finish = new Date();
 				long elapsedTimeMS = finish.getTime() - start.getTime();
 				// if ten seconds has past, reorder the top peers get a new one
@@ -356,7 +376,10 @@ public class BitTortoise
 						{
 							p.shouldChoke = false;
 						}
+						BitTortoise.totalDownloaded += p.bytesReadThisRound;
+						BitTortoise.totalUploaded += p.bytesSentThisRound;
 						p.bytesReadThisRound = 0;
+						p.bytesSentThisRound = 0;
 					}
 					start = new Date();
 				}
@@ -386,7 +409,7 @@ public class BitTortoise
 									numConnections ++;
 
 									if(BitTortoise.verbose)
-										System.out.println("New outgoing connection finished. (Peer " + newConnection.socket().getInetAddress().getHostAddress() + ":" + newConnection.socket().getPort() + ")");
+										System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + newConnection.socket().getInetAddress().getHostAddress() + ":" + newConnection.socket().getPort() + "): Incoming connection finished.");
 								}
 							}
 							else if(key.isConnectable())
@@ -410,15 +433,19 @@ public class BitTortoise
 										p.handshake_sent = true;
 										
 										if(BitTortoise.verbose)
-											System.out.println("New outgoing connection finished. (Peer " + p.ip + ":" + p.port + ")");
+											System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Outgoing connection finished.");
 									}
 									catch(IOException e)
 									{
-										System.err.println("Could not open new connection to peer - " + e.getMessage());
+										System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Could not open new connection to peer - " + e.getMessage());
 										
 										if(activePeerMap.containsValue(p))
 										{
 											removePeer(p, activePeerMap);
+										}
+										if(pendingPeerMap.containsValue(p))
+										{
+											removePeer(p, pendingPeerMap);
 										}
 										key.cancel();
 										numConnections--;
@@ -426,7 +453,7 @@ public class BitTortoise
 								}
 								else
 								{
-									System.err.println("Could not open new connection to peer.");
+									System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Could not open new connection to peer.");
 									
 									if(pendingPeerMap.containsValue(p))
 									{
@@ -441,6 +468,7 @@ public class BitTortoise
 								SocketChannel sc = (SocketChannel)key.channel();
 								// read, process inputs
 								// Check if this SocketChannel is already mapping to a peer - if not, we can only accept a handshake from it - if so, we are cool
+								String ipAndPort = sc.socket().getInetAddress().getHostAddress() + ":" + sc.socket().getPort();
 								int size = -1;
 								if(activePeerMap.containsKey(sc))
 								{
@@ -458,7 +486,7 @@ public class BitTortoise
 										}
 										catch(IOException e)
 										{
-											System.err.println("Error closing socket!");
+											System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + ipAndPort + "): Error closing socket!");
 										}
 										
 										numConnections--;
@@ -484,7 +512,7 @@ public class BitTortoise
 										}
 										catch(IOException e)
 										{
-											System.err.println("Error closing socket!");
+											System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + ipAndPort + "): Error closing socket!");
 										}
 										
 										numConnections--;
@@ -530,7 +558,7 @@ public class BitTortoise
 											connectedTo.readBuffer = buf;
 
 											if(BitTortoise.verbose)
-												System.out.println("New incoming connection finished (received handshake). (Peer " + connectedTo.ip + ":" + connectedTo.port + ")");
+												System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + connectedTo.ip + ":" + connectedTo.port + "): Received handshake.");
 										}
 										
 										if(size != 0)
@@ -549,7 +577,7 @@ public class BitTortoise
 												}
 												catch(IOException e)
 												{
-													System.err.println("Error closing socket!");
+													System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + ipAndPort + "): Error closing socket!");
 												}
 
 												numConnections--;
@@ -583,9 +611,15 @@ public class BitTortoise
 						{
 							System.err.println("IO error - " + e.getMessage());
 							if(activePeerMap.containsKey((SocketChannel)key.channel()))
+							{
 								activePeerMap.get((SocketChannel)key.channel()).cleanup();
+								activePeerMap.remove((SocketChannel)key.channel());
+							}
 							if(pendingPeerMap.containsKey((SocketChannel)key.channel()))
+							{
 								pendingPeerMap.get((SocketChannel)key.channel()).cleanup();
+								pendingPeerMap.remove((SocketChannel)key.channel());
+							}
 							key.cancel();
 						}
 					}
@@ -627,11 +661,11 @@ public class BitTortoise
 									numConnections++;
 									
 									if(BitTortoise.verbose)
-										System.out.println("New outgoing connection started. (Peer " + toConnect.ip + ":" + toConnect.port + ")");
+										System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + toConnect.ip + ":" + toConnect.port + "): New outgoing connection started.");
 								}
 								catch(IOException e)
 								{
-									System.err.println("Could not open new connection to peer - " + e.getMessage());
+									System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Could not open new connection to peer - " + e.getMessage());
 									
 									if(pendingPeerMap.containsValue(toConnect))
 									{
@@ -659,19 +693,20 @@ public class BitTortoise
 						}
 					}
 				}
-				else if(isIncomplete && numConnections < 30 && (new Date()).getTime() - tracker.min_interval * 1000 > BitTortoise.lastTrackerCommunication)
+				else if(isIncomplete && numConnections < 30 && (((new Date()).getTime() - tracker.interval * 1000 > BitTortoise.lastTrackerCommunication) || (activePeerMap.size() == 0 && pendingPeerMap.size() == 0 && ((new Date()).getTime() - tracker.min_interval * 1000 > BitTortoise.lastTrackerCommunication))))
 				{
 					HttpURLConnection tempConnection = (HttpURLConnection)(new URL(torrentFile.tracker_url + "?" +
 							"info_hash=" + torrentFile.info_hash_as_url + "&" +
-							"downloaded=0" + "&" +
-							"uploaded=0" + "&" +
+							"downloaded=" + BitTortoise.totalDownloaded + "&" +
+							"uploaded=" + BitTortoise.totalUploaded + "&" +
 							"left=" + torrentFile.file_length + "&" +
 							"peer_id=" + TorrentFileHandler.byteArrayToURLString(my_peer_id) + "&" +
+							((tracker.tracker_id == null)? ("") : ("tracker_id=" + tracker.tracker_id + "&")) +
 							"port=" + port).openConnection());
 					
 					tracker.connect(tempConnection,my_peer_id);
 					
-					/*only add new peers to the list*/
+					// Only add new peers to the list
 					for(int i=0;i<tracker.peerList.size();i++){
 						if(!peerList.contains(tracker.peerList.get(i))){
 							peerList.add(tracker.peerList.get(i));
@@ -703,8 +738,35 @@ public class BitTortoise
 		}
 		
 		long timeTaken = (new Date()).getTime() - startTime;
-		System.out.println("Success!");
-		System.out.println("File received in " + timeTaken / 1000 + " seconds (overall rate: " + (BitTortoise.torrentFile.file_length / timeTaken) + " kB/s).");
+		
+		try
+		{
+			HttpURLConnection tempConnection = (HttpURLConnection)(new URL(torrentFile.tracker_url + "?" +
+					"info_hash=" + torrentFile.info_hash_as_url + "&" +
+					"downloaded=" + BitTortoise.totalDownloaded + "&" +
+					"uploaded=" + BitTortoise.totalUploaded + "&" +
+					"left=" + torrentFile.file_length + "&" +
+					"event=completed" + "&" +
+					"peer_id=" + TorrentFileHandler.byteArrayToURLString(my_peer_id) + "&" +
+					((tracker.tracker_id == null)? ("") : ("tracker_id=" + tracker.tracker_id + "&")) +
+					"port=" + port).openConnection());
+			
+			tracker.connect(tempConnection,my_peer_id);
+		}
+		catch(IOException e)
+		{
+			System.err.println("Unable to alert tracker that this download has completed.");
+		}
+		
+		if(BitTortoise.quitNotReceived)
+		{
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Success!");
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": File received in " + timeTaken / 1000 + " seconds (overall rate: " + (BitTortoise.torrentFile.file_length / timeTaken) + " kB/s).");
+		}
+		else
+		{
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": User quit before file completion.");
+		}
 	}
 	
 	/**
@@ -832,11 +894,11 @@ public class BitTortoise
 			}
 		}
 		
-		if(BitTortoise.verbose)
-			System.out.println("New " + p.bytesLeft + " byte message (" + Peer.getBytesAsHex(p.readBuffer.array()) + ") received. (Peer " + p.ip + ":" + p.port + ")");
-		
 		if (p.blockRequest != null && p.blockRequest.status == BlockRequest.STARTED)
 		{
+			int tempPiece = p.blockRequest.piece;
+			int tempOffset = p.blockRequest.offset;
+			int tempLength = p.blockRequest.length;
 			byte[] block;
 			int bytesLeftInBlock = p.blockRequest.length - p.blockRequest.bytesRead;
 			if (p.bytesLeft <= bytesLeftInBlock)
@@ -864,10 +926,9 @@ public class BitTortoise
 			{
 				p.emptyFinishedRequests();
 				p.fill(BitTortoise.completedPieces,BitTortoise.inProgress, BitTortoise.outstandingPieces);
+				if(BitTortoise.verbose)
+					System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Received Piece (" + tempPiece + "," + tempOffset + "," + tempLength + ") message (end).");
 			}
-			
-			if(BitTortoise.verbose)
-				System.out.println("Continuation of Piece message received. (Peer " + p.ip + ":" + p.port + ")\n");
 		}
 		
 		if(!p.handshake_received )
@@ -899,7 +960,7 @@ public class BitTortoise
 				p.handshake_received = true;
 				
 				if(BitTortoise.verbose)
-					System.out.println("Handshake message received. (Peer " + p.ip + ":" + p.port + ")\n");
+					System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Received Handshake message.");
 			}
 			else
 			{
@@ -923,7 +984,7 @@ public class BitTortoise
 				p.bytesLeft -= 4;
 				
 				if(BitTortoise.verbose)
-					System.out.println("Keep-alive message received. (Peer " + p.ip + ":" + p.port + ")\n");
+					System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Received Keep-alive message.");
 			}
 			else if(length >= 1 && p.bytesLeft >= 5)
 			{
@@ -946,7 +1007,7 @@ public class BitTortoise
 					p.bytesLeft -= 5;
 					
 					if(BitTortoise.verbose)
-						System.out.println("Choke message received. (Peer " + p.ip + ":" + p.port + ")\n");
+						System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Received Choke message.");
 				}
 				else if(id == 1)
 				{
@@ -966,7 +1027,7 @@ public class BitTortoise
 					p.bytesLeft -= 5;
 					
 					if(BitTortoise.verbose)
-						System.out.println("Unchoke message received. (Peer " + p.ip + ":" + p.port + ")\n");
+						System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Received Unchoke message.");
 				}
 				else if(id == 2)
 				{
@@ -983,7 +1044,7 @@ public class BitTortoise
 					p.bytesLeft -= 5;
 					
 					if(BitTortoise.verbose)
-						System.out.println("Interested message received. (Peer " + p.ip + ":" + p.port + ")\n");
+						System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Received Interested message.");
 				}
 				else if(id == 3)
 				{
@@ -1000,7 +1061,7 @@ public class BitTortoise
 					p.bytesLeft -= 5;
 					
 					if(BitTortoise.verbose)
-						System.out.println("Not Interested message received. (Peer " + p.ip + ":" + p.port + ")\n");
+						System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Received Not Interested message.");
 				}
 				else if(id == 4)
 				{
@@ -1031,7 +1092,7 @@ public class BitTortoise
 						p.bytesLeft -= 9;
 						
 						if(BitTortoise.verbose)
-							System.out.println("Have (" + Integer.toHexString(piece_index) + ") message received. (Peer " + p.ip + ":" + p.port + ")\n");
+							System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Received Have (" + Integer.toHexString(piece_index) + ") message.");
 					}
 				}
 				else if(id == 5)
@@ -1065,7 +1126,7 @@ public class BitTortoise
 						p.bytesLeft -= (length + 4);
 						
 						if(BitTortoise.verbose)
-							System.out.println("Bitfield message received. (Peer " + p.ip + ":" + p.port + ")\n");
+							System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Received Bitfield message.");
 					}
 				}
 				else if(id == 6)
@@ -1110,52 +1171,59 @@ public class BitTortoise
 						p.bytesLeft -= 17;
 						
 						if(BitTortoise.verbose)
-							System.out.println("Request (" + request_index + "," + request_begin + "," + request_length + ") message received. (Peer " + p.ip + ":" + p.port + ")\n");
+							System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Received Request (" + request_index + "," + request_begin + "," + request_length + ") message.");
 					}
 				}
 				else if(id == 7)
 				{
-					// Note: handle size somehow...
-					
-					// Piece Message Received:
-					
-					// Handle Piece message:
-					int piece_index = p.readBuffer.getInt(5);
-					int block_begin = p.readBuffer.getInt(9);
-					int block_length = length - 9;
-					
-					boolean requestExists = false;
-					for(BlockRequest br : p.sendRequests)
+					if(p.bytesLeft < 13)
 					{
-						if(br.piece == piece_index && br.offset == block_begin && br.length == block_length)
-						{
-							requestExists = true;
-							break;
-						}
+						cont = false;
 					}
-					if(!requestExists)
-						return false;
-					
-					p.blockRequest = BitTortoise.outstandingPieces.get(piece_index).getBlock(block_begin);
-					p.blockRequest.status = BlockRequest.STARTED;
-					
-					//convert bytebuffer into byte array and store it in 
-					byte [] block = new byte[p.bytesLeft - 13];
-					p.readBuffer.position(13);
-					p.readBuffer.get(block, 0, p.bytesLeft - 13);
-					processPieceMessage(p, piece_index, block_begin, block);
-					
-					// Note: the following should really be done within "processPieceMessage" instead of here, but whatever:
-					// Perform state cleanup:
-					int amountToTrim = Math.min(length + 4, p.bytesLeft);
-					p.readBuffer.position(amountToTrim);
-					p.readBuffer.compact();
-					p.readBuffer.position(0);
-					
-					p.bytesLeft -= (amountToTrim);
-					
-					if(BitTortoise.verbose)
-						System.out.println("Piece (" + piece_index + "," + block_begin + "," + block_length + ") message received. (Peer " + p.ip + ":" + p.port + ")\n");
+					else
+					{
+						// Note: handle size somehow...
+						
+						// Piece Message Received:
+						
+						// Handle Piece message:
+						int piece_index = p.readBuffer.getInt(5);
+						int block_begin = p.readBuffer.getInt(9);
+						int block_length = length - 9;
+						
+						boolean requestExists = false;
+						for(BlockRequest br : p.sendRequests)
+						{
+							if(br.piece == piece_index && br.offset == block_begin && br.length == block_length)
+							{
+								requestExists = true;
+								break;
+							}
+						}
+						if(!requestExists)
+							return false;
+						
+						p.blockRequest = BitTortoise.outstandingPieces.get(piece_index).getBlock(block_begin);
+						p.blockRequest.status = BlockRequest.STARTED;
+						
+						//convert bytebuffer into byte array and store it in 
+						byte [] block = new byte[p.bytesLeft - 13];
+						p.readBuffer.position(13);
+						p.readBuffer.get(block, 0, p.bytesLeft - 13);
+						processPieceMessage(p, piece_index, block_begin, block);
+						
+						// Note: the following should really be done within "processPieceMessage" instead of here, but whatever:
+						// Perform state cleanup:
+						int amountToTrim = Math.min(length + 4, p.bytesLeft);
+						p.readBuffer.position(amountToTrim);
+						p.readBuffer.compact();
+						p.readBuffer.position(0);
+						
+						p.bytesLeft -= (amountToTrim);
+						
+						if(BitTortoise.verbose)
+							System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Received Piece (" + piece_index + "," + block_begin + "," + block_length + ") message (beginning).");
+					}
 				}
 				else if(id == 8)
 				{
@@ -1191,7 +1259,7 @@ public class BitTortoise
 						p.bytesLeft -= 17;
 						
 						if(BitTortoise.verbose)
-							System.out.println("Cancel (" + cancel_index + "," + cancel_begin + "," + cancel_length + ") message received. (Peer " + p.ip + ":" + p.port + ")\n");
+							System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Received Cancel (" + cancel_index + "," + cancel_begin + "," + cancel_length + ") message.");
 					}
 				}
 				else
@@ -1217,13 +1285,13 @@ public class BitTortoise
 						p.bytesLeft -= (length + 4);
 						
 						if(BitTortoise.verbose)
-							System.out.println("Unknown message received. (Peer " + p.ip + ":" + p.port + ")\n");
+							System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Received Unknown message - Ignored.");
 					}
 				}
 			}
 			else
 			{
-				System.err.println("Disconnecting from peer - Received bad data");
+				System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Disconnecting from peer - Received bad data");
 				return false;
 			}
 		}
@@ -1246,7 +1314,7 @@ public class BitTortoise
 		}
 		catch(IOException e)
 		{
-			System.err.println("Error occurred while getting Piece " + index + ".");
+			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Error occurred while getting Piece " + index + ".");
 		}
 		return MessageLibrary.getPieceMessage(index, begin, length, byteArray);
 	}
@@ -1261,7 +1329,7 @@ public class BitTortoise
 		}
 		catch(IOException e)
 		{
-			System.err.println("Error occurred while storing Piece " + piece_index + ".");
+			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Error occurred while storing Piece " + piece_index + ".");
 			return false;
 		}
 		
@@ -1320,11 +1388,11 @@ public class BitTortoise
 					// The piece has been finished:
 					BitTortoise.inProgress.set(piece_index, false);
 					BitTortoise.completedPieces.set(piece_index, true);
-					System.out.println("Completed piece " + piece_index);
+					System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Completed piece " + piece_index);
 				}
 				else
 				{
-					System.err.println("Error in SHA1 hash for piece " + piece_index + "!");
+					System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Error in SHA1 hash for piece " + piece_index + "!");
 					BitTortoise.outstandingPieces.get(piece_index).resetAll();
 				}
 			}
