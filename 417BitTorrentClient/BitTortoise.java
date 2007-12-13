@@ -568,33 +568,46 @@ public class BitTortoise
 							{
 								SocketChannel sc = (SocketChannel)key.channel();
 								Peer p = pendingPeerMap.get(sc);
-								
-								if(sc.finishConnect())
+								try
 								{
-									try
+									if(sc.finishConnect())
 									{
-										sc.register(select, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
-										
-										pendingPeerMap.remove(sc);
-										activePeerMap.put(sc, p);
-										
-										// Send handshake message to the peer:
-										sc.write(ByteBuffer.wrap(p.handshake));
-										
-										// Update situation:
-										p.handshake_sent = true;
-										
-										if(BitTortoise.verbose)
-											System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Outgoing connection finished.");
-									}
-									catch(IOException e)
-									{
-										System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Could not open new connection to peer - " + e.getMessage());
-										
-										if(activePeerMap.containsValue(p))
+										try
 										{
-											removePeer(p, activePeerMap);
+											sc.register(select, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+											
+											pendingPeerMap.remove(sc);
+											activePeerMap.put(sc, p);
+											
+											// Send handshake message to the peer:
+											sc.write(ByteBuffer.wrap(p.handshake));
+											
+											// Update situation:
+											p.handshake_sent = true;
+											
+											if(BitTortoise.verbose)
+												System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Outgoing connection finished.");
 										}
+										catch(IOException e)
+										{
+											System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Could not open new connection to peer - " + e.getMessage());
+											
+											if(activePeerMap.containsValue(p))
+											{
+												removePeer(p, activePeerMap);
+											}
+											if(pendingPeerMap.containsValue(p))
+											{
+												removePeer(p, pendingPeerMap);
+											}
+											key.cancel();
+											numConnections--;
+										}
+									}
+									else
+									{
+										System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Could not open new connection to peer.");
+										
 										if(pendingPeerMap.containsValue(p))
 										{
 											removePeer(p, pendingPeerMap);
@@ -603,7 +616,7 @@ public class BitTortoise
 										numConnections--;
 									}
 								}
-								else
+								catch(IOException e)
 								{
 									System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Could not open new connection to peer.");
 									
@@ -688,7 +701,7 @@ public class BitTortoise
 										size -= 68;
 										
 										// Check if the info hash that was given matches the one we are providing (by wrapping in a ByteBuffer, using .equals)
-										if(!ByteBuffer.wrap(external_info_hash).equals(ByteBuffer.wrap(torrentFile.info_hash_as_binary)))
+										if(!Arrays.equals(external_info_hash,torrentFile.info_hash_as_binary))
 										{
 											// Peer requested connection for a bad info hash - Throw out connection ?
 										}
@@ -1150,7 +1163,7 @@ public class BitTortoise
 				p.bytesLeft -= 68;
 				
 				// Check if the info hash that was given matches the one we are providing (by wrapping in a ByteBuffer, using .equals)
-				if(!ByteBuffer.wrap(external_info_hash).equals(ByteBuffer.wrap(p.info_hash)))
+				if(!Arrays.equals(external_info_hash,p.info_hash))
 				{
 					// Peer requested connection for a bad info hash - Throw out connection ?
 					return false;
@@ -1552,31 +1565,7 @@ public class BitTortoise
 			p.blockRequest = null; //this peer is open to receive a new block
 			if (outstandingPieces.get(piece_index).allFinished())
 			{
-				byte[] entirePiece;
-				if(piece_index == BitTortoise.totalPieceCount - 1)
-					entirePiece = new byte[BitTortoise.torrentFile.file_length - (BitTortoise.totalPieceCount - 1) * BitTortoise.torrentFile.piece_length]; //this is a HUGE array, is there a better way to do this?
-				else
-					entirePiece = new byte[BitTortoise.torrentFile.piece_length]; //this is a HUGE array, is there a better way to do this?
-				byte[] mySHA1;
-				try
-				{
-					BitTortoise.destinationFile.seek(piece_index * BitTortoise.torrentFile.piece_length);
-					if(piece_index == BitTortoise.totalPieceCount - 1)
-					{
-						BitTortoise.destinationFile.read(entirePiece, 0, BitTortoise.torrentFile.file_length - (BitTortoise.totalPieceCount - 1) * BitTortoise.torrentFile.piece_length);
-					}
-					else
-					{
-						BitTortoise.destinationFile.read(entirePiece, 0, BitTortoise.torrentFile.piece_length);
-					}
-				}
-				catch(Exception e)
-				{
-					System.out.println("Error reading in entire piece");
-					System.exit(1);
-				}
-				mySHA1 = SHA1Functions.getSha1Hash(entirePiece);
-				if (ByteBuffer.wrap(mySHA1).equals(ByteBuffer.wrap((byte[])BitTortoise.torrentFile.piece_hash_values_as_binary.get(piece_index))))
+				if (Arrays.equals(BitTortoise.getSha1FromFile(piece_index, BitTortoise.totalPieceCount, BitTortoise.destinationFile, BitTortoise.torrentFile), (byte[])BitTortoise.torrentFile.piece_hash_values_as_binary.get(piece_index)))
 				{
 					BitTortoise.outstandingPieces.remove(piece_index);
 					BitTortoise.completedPieces.set(piece_index);
@@ -1597,5 +1586,35 @@ public class BitTortoise
 			}
 		}
 		return true;
+	}
+	
+	public static byte[] getSha1FromFile(int index, int pieceCount, RandomAccessFile raf, TorrentFile tf)
+	{
+		byte[] entirePiece;
+		if(index == pieceCount - 1)
+			entirePiece = new byte[tf.file_length - (pieceCount - 1) * tf.piece_length]; //this is a HUGE array, is there a better way to do this?
+		else
+			entirePiece = new byte[tf.piece_length]; //this is a HUGE array, is there a better way to do this?
+		byte[] mySHA1;
+		try
+		{
+			destinationFile.seek(index * tf.piece_length);
+			if(index == pieceCount - 1)
+			{
+				raf.read(entirePiece, 0, tf.file_length - (pieceCount - 1) * tf.piece_length);
+			}
+			else
+			{
+				raf.read(entirePiece, 0, tf.piece_length);
+			}
+		}
+		catch(Exception e)
+		{
+			System.out.println("Error reading in entire piece");
+			System.exit(1);
+		}
+		mySHA1 = SHA1Functions.getSha1Hash(entirePiece);
+		
+		return mySHA1;
 	}
 }

@@ -194,7 +194,7 @@ public class Peer
 		{
 			Peer other = (Peer)o;
 			
-			return (other.ip.equals(this.ip) && other.port == this.port && ByteBuffer.wrap(other.peer_id).equals(ByteBuffer.wrap(this.peer_id)) && ByteBuffer.wrap(other.info_hash).equals(ByteBuffer.wrap(this.info_hash)));
+			return (other.ip.equals(this.ip) && other.port == this.port && Arrays.equals(other.peer_id, this.peer_id) && Arrays.equals(other.info_hash, this.info_hash));
 		}
 		return false;
 	}
