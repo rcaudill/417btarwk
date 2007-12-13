@@ -572,37 +572,19 @@ public class BitTortoise
 								{
 									if(sc.finishConnect())
 									{
-										try
-										{
-											sc.register(select, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
-											
-											pendingPeerMap.remove(sc);
-											activePeerMap.put(sc, p);
-											
-											// Send handshake message to the peer:
-											sc.write(ByteBuffer.wrap(p.handshake));
-											
-											// Update situation:
-											p.handshake_sent = true;
-											
-											if(BitTortoise.verbose)
-												System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Outgoing connection finished.");
-										}
-										catch(IOException e)
-										{
-											System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Could not open new connection to peer - " + e.getMessage());
-											
-											if(activePeerMap.containsValue(p))
-											{
-												removePeer(p, activePeerMap);
-											}
-											if(pendingPeerMap.containsValue(p))
-											{
-												removePeer(p, pendingPeerMap);
-											}
-											key.cancel();
-											numConnections--;
-										}
+										sc.register(select, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+										
+										pendingPeerMap.remove(sc);
+										activePeerMap.put(sc, p);
+										
+										// Send handshake message to the peer:
+										sc.write(ByteBuffer.wrap(p.handshake));
+										
+										// Update situation:
+										p.handshake_sent = true;
+										
+										if(BitTortoise.verbose)
+											System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Outgoing connection finished.");
 									}
 									else
 									{
@@ -620,6 +602,10 @@ public class BitTortoise
 								{
 									System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Could not open new connection to peer.  " + e.getMessage());
 									
+									if(activePeerMap.containsValue(p))
+									{
+										removePeer(p, activePeerMap);
+									}
 									if(pendingPeerMap.containsValue(p))
 									{
 										removePeer(p, pendingPeerMap);
