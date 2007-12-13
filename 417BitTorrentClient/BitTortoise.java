@@ -618,7 +618,7 @@ public class BitTortoise
 								}
 								catch(IOException e)
 								{
-									System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Could not open new connection to peer.");
+									System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Could not open new connection to peer.  " + e.getMessage());
 									
 									if(pendingPeerMap.containsValue(p))
 									{
@@ -769,8 +769,6 @@ public class BitTortoise
 									writablePeer.sendMessage(sc, BitTortoise.completedPieces, BitTortoise.inProgress, BitTortoise.outstandingPieces);
 								}
 							}
-							else
-								System.out.println("other");
 						}
 						catch(IOException e)
 						{
