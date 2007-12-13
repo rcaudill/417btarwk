@@ -173,7 +173,11 @@ public class BitTortoise
 				}
 			}
 		}
-		
+		if(BitTortoise.initialSeeding && resumeInfoFilename != null)
+		{
+			System.err.println("java BitTortoise <torrent_file> [-d <destination_file>] [-p <port>] [-v] [-s] [-c] [-r <bit tortoise resume info file>]");
+			System.exit(1);
+		}
 		
 		
 		// END of SECTION: Parse command-line arguments
@@ -218,17 +222,13 @@ public class BitTortoise
 		// Create the destination file:
 		try
 		{
-			if(destinationFileName != null)
+			// If we were not given a file name, use the string preceding ".torrent" in the torrent file:
+			// Ex. "testTorrentFile.txt.torrent" -> "testTorrentFile.txt"
+			if(destinationFileName == null)
 			{
-				// If we were given a file name, use it:
-				BitTortoise.destinationFile = new RandomAccessFile(destinationFileName, "rw");
+				destinationFileName = args[0].substring(0,args[0].lastIndexOf(".torrent"));
 			}
-			else
-			{
-				// If we were not given a file name, use the string preceding ".torrent" in the torrent file:
-				// Ex. "testTorrentFile.txt.torrent" -> "testTorrentFile.txt"
-				BitTortoise.destinationFile = new RandomAccessFile(args[0].substring(0,args[0].lastIndexOf(".torrent")), "rw");
-			}
+			BitTortoise.destinationFile = new RandomAccessFile(destinationFileName, "rw");
 			
 			// Set the file to the total length of the file:
 			if(!BitTortoise.initialSeeding && resumeInfoFilename == null)
@@ -550,18 +550,27 @@ public class BitTortoise
 								// Only accept new connections if we have less than a desirable number:
 								if(numConnections <= 56)
 								{
-									// Incoming Connection to the server channel/socket:
-									// Accept the connection, set it to not block:
-									SocketChannel newConnection = serverChannel.accept();
-									newConnection.configureBlocking(false);
-									
-									// Register the connection with the selector
-									newConnection.register(select, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
-									
-									numConnections ++;
-
-									if(BitTortoise.verbose)
-										System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + newConnection.socket().getInetAddress().getHostAddress() + ":" + newConnection.socket().getPort() + "): Incoming connection finished.");
+									try
+									{
+										// Incoming Connection to the server channel/socket:
+										// Accept the connection, set it to not block:
+										SocketChannel newConnection = serverChannel.accept();
+										newConnection.configureBlocking(false);
+										
+										// Register the connection with the selector
+										newConnection.register(select, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+										
+										numConnections ++;
+										
+										if(BitTortoise.verbose)
+											System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + newConnection.socket().getInetAddress().getHostAddress() + ":" + newConnection.socket().getPort() + "): Incoming connection finished.");
+									}
+									catch(IOException e)
+									{
+										System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Error receiving new connection from peer.");
+										
+										key.cancel();
+									}
 								}
 							}
 							else if(key.isConnectable())
@@ -1288,7 +1297,7 @@ public class BitTortoise
 						p.bytesLeft -= 9;
 						
 						if(BitTortoise.verbose)
-							System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Received Have (" + Integer.toHexString(piece_index) + ") message.");
+							System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Received Have (" + piece_index + ") message.");
 					}
 				}
 				else if(id == 5)
