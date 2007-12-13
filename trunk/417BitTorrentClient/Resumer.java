@@ -62,7 +62,11 @@ public class Resumer
 			int i = 0;
 			while((i = completed.nextSetBit(i)) != -1)
 			{
-				
+				byte[] sha = BitTortoise.getSha1FromFile(i, totalPieces, destinationFile, torrentFile);
+				if(!Arrays.equals(sha, (byte[])torrentFile.piece_hash_values_as_binary.get(i)))
+				{
+					return false;
+				}
 			}
 		}
 		catch(IOException e)
@@ -101,8 +105,29 @@ public class Resumer
 	
 	public static boolean checkSeed(RandomAccessFile sourceFile, TorrentFile torrentFile)
 	{
-		// Load all of the pieces from the source file, check their hashes:
+		int totalPieces = ((int)torrentFile.file_length/torrentFile.piece_length) + (((torrentFile.file_length % torrentFile.piece_length) == 0)? (0) : (1));
 		
-		return false;
+		// Load all of the finished pieces (ones not in the map) from the destination file, check their hashes:
+		try
+		{
+			if(sourceFile.length() != torrentFile.file_length)
+				return false;
+			
+			// Cycle through completed pieces, check that their SHA1 hashes are equal:
+			for(int i = 0; i < totalPieces; i++)
+			{
+				byte[] sha = BitTortoise.getSha1FromFile(i, totalPieces, sourceFile, torrentFile);
+				if(!Arrays.equals(sha, (byte[])torrentFile.piece_hash_values_as_binary.get(i)))
+				{
+					return false;
+				}
+			}
+		}
+		catch(IOException e)
+		{
+			return false;
+		}
+		
+		return true;
 	}
 }
