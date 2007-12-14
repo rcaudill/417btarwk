@@ -485,8 +485,7 @@ public class BitTortoise
 						{
 							if(possiblePeers.get(index).peer_interested)
 							{
-								if(possiblePeers.get(index).am_choking)
-									possiblePeers.get(index).shouldUnchoke = true;
+								possiblePeers.get(index).shouldUnchoke = true;
 								interested++;
 							}
 							index ++;
@@ -502,8 +501,7 @@ public class BitTortoise
 					{
 						for(Peer p : possiblePeers)
 						{
-							if(p.am_choking)
-								p.shouldUnchoke = true;
+							p.shouldUnchoke = true;
 						}
 					}
 					// go through and set the peers as choked if they aren't already
