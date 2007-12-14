@@ -718,6 +718,8 @@ public class BitTortoise
 										connectedIPs.remove(sc.socket().getInetAddress().getHostAddress());
 										
 										numConnections--;
+										
+										System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + ipAndPort + "): Connection closed (gracefully).");
 									}
 									
 									if(size > 67 && isHandshakeMessage(buf))
@@ -1108,7 +1110,10 @@ public class BitTortoise
 				
 				// If the other side is (orderly) trying to shut down the connection: 
 				if(l == -1)
+				{
+					System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Connection closed (gracefully).");
 					return false;
+				}
 				
 				p.bytesLeft += l;
 				p.readBuffer.position(0);
