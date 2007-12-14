@@ -186,7 +186,7 @@ public class Peer
 	}
 	
 	/**
-	 * Checks whether this object is equal to another object (checks type, ip, port, peer_id, and info_hash)
+	 * Checks whether this object is equal to another object (checks type, ip)
 	 */
 	public boolean equals(Object o)
 	{
@@ -194,7 +194,7 @@ public class Peer
 		{
 			Peer other = (Peer)o;
 			
-			return (other.ip.equals(this.ip) && other.port == this.port && Arrays.equals(other.peer_id, this.peer_id) && Arrays.equals(other.info_hash, this.info_hash));
+			return (other.ip.equals(this.ip));
 		}
 		return false;
 	}

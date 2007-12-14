@@ -427,8 +427,6 @@ public class BitTortoise
 			// Bind the socket represented by the server channel to a port:
 			serverChannel.socket().bind(new InetSocketAddress(port));
 			
-			serverChannel.socket().setReuseAddress(true);
-			
 			// Register this server channel within the selector:
 			serverChannel.register(select, SelectionKey.OP_ACCEPT);
 			
@@ -806,8 +804,6 @@ public class BitTortoise
 								{
 									// Open a new connection to the peer, set to not block:
 									SocketChannel sc = SocketChannel.open();
-									sc.socket().bind(new InetSocketAddress(port));
-									
 									sc.configureBlocking(false);
 									
 									sc.connect(new InetSocketAddress(toConnect.ip, toConnect.port));
@@ -867,8 +863,10 @@ public class BitTortoise
 					tracker.connect(tempConnection,my_peer_id);
 					
 					// Only add new peers to the list
-					for(int i=0;i<tracker.peerList.size();i++){
-						if(!peerList.contains(tracker.peerList.get(i))){
+					for(int i=0;i<tracker.peerList.size();i++)
+					{
+						if(!peerList.contains(tracker.peerList.get(i)))
+						{
 							peerList.add(tracker.peerList.get(i));
 						}
 					}
