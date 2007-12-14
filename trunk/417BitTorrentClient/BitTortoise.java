@@ -1378,7 +1378,7 @@ public class BitTortoise
 						if(!BitTortoise.completedPieces.get(request_index))
 							return false;
 						
-						if(request_begin <= 0 || request_begin > BitTortoise.torrentFile.piece_length || request_length <= 0 || request_begin + request_length > BitTortoise.torrentFile.piece_length)
+						if(request_begin < 0 || request_begin > BitTortoise.torrentFile.piece_length || request_length <= 0 || request_begin + request_length > BitTortoise.torrentFile.piece_length)
 							return false;
 						
 						if(request_index == BitTortoise.totalPieceCount - 1)
