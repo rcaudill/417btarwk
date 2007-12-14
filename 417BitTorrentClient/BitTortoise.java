@@ -427,6 +427,8 @@ public class BitTortoise
 			// Bind the socket represented by the server channel to a port:
 			serverChannel.socket().bind(new InetSocketAddress(port));
 			
+			serverChannel.socket().setReuseAddress(true);
+			
 			// Register this server channel within the selector:
 			serverChannel.register(select, SelectionKey.OP_ACCEPT);
 			
@@ -490,6 +492,12 @@ public class BitTortoise
 							}
 							index ++;
 						}
+						
+						// get one to randomly unchoke
+						int optimisticUnchokeIndex = (int)(Math.random() * (possiblePeers.size() - 3));
+						optimisticUnchokeIndex = optimisticUnchokeIndex + 3;
+						if(optimisticUnchokeIndex > 0 && optimisticUnchokeIndex < possiblePeers.size() && !possiblePeers.get(optimisticUnchokeIndex).shouldUnchoke && possiblePeers.get(optimisticUnchokeIndex).am_choking)
+							possiblePeers.get(optimisticUnchokeIndex).shouldUnchoke = true;
 					}
 					else
 					{
@@ -499,12 +507,6 @@ public class BitTortoise
 								p.shouldUnchoke = true;
 						}
 					}
-					
-					// get one to randomly unchoke
-					int optimisticUnchokeIndex = (int)(Math.random() * (possiblePeers.size() - 3));
-					optimisticUnchokeIndex = optimisticUnchokeIndex + 3;
-					if(optimisticUnchokeIndex > 0 && optimisticUnchokeIndex < possiblePeers.size() && !possiblePeers.get(optimisticUnchokeIndex).shouldUnchoke && possiblePeers.get(optimisticUnchokeIndex).am_choking)
-						possiblePeers.get(optimisticUnchokeIndex).shouldUnchoke = true;
 					
 					// go through and set the peers as choked if they aren't already
 					for (int j = 0; j < possiblePeers.size(); j++)
@@ -519,12 +521,12 @@ public class BitTortoise
 							p.shouldChoke = false;
 						}
 						
-						if(p.am_choking == true && p.shouldUnchoke == true)
+						if(p.am_choking == false && p.shouldUnchoke == true)
 						{
 							p.shouldUnchoke = false;
 						}
 						
-						if(p.am_choking == false  && p.shouldChoke == true)
+						if(p.am_choking == true  && p.shouldChoke == true)
 						{
 							p.shouldChoke = false;
 						}
@@ -832,8 +834,6 @@ public class BitTortoise
 									{
 										removePeer(toConnect, pendingPeerMap);
 									}
-									
-									peerList.remove(last);
 									
 									if(temp != null)
 										temp.cancel();
