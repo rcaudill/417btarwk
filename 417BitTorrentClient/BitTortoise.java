@@ -78,6 +78,7 @@ public class BitTortoise
 		BitTortoise.totalUploaded = 0;
 		BitTortoise.totalDownloaded = 0;
 		String resumeInfoFilename = null;
+		Set<String> connectedIPs = new TreeSet<String>();
 		
 		long startTime = (new Date()).getTime();
 		
@@ -554,21 +555,31 @@ public class BitTortoise
 										// Incoming Connection to the server channel/socket:
 										// Accept the connection, set it to not block:
 										SocketChannel newConnection = serverChannel.accept();
-										newConnection.configureBlocking(false);
 										
-										// Register the connection with the selector
-										newConnection.register(select, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+										String ip = newConnection.socket().getInetAddress().getHostAddress();
 										
-										numConnections ++;
-										
-										if(BitTortoise.verbose)
-											System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + newConnection.socket().getInetAddress().getHostAddress() + ":" + newConnection.socket().getPort() + "): Incoming connection finished.");
+										if(!connectedIPs.contains(ip))
+										{
+											connectedIPs.add(ip);
+
+											newConnection.configureBlocking(false);
+											
+											// Register the connection with the selector
+											newConnection.register(select, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+											
+											numConnections ++;
+											
+											if(BitTortoise.verbose)
+												System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + newConnection.socket().getInetAddress().getHostAddress() + ":" + newConnection.socket().getPort() + "): Incoming connection finished.");
+										}
+										else
+										{
+											newConnection.close();
+										}
 									}
 									catch(IOException e)
 									{
 										System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Error receiving new connection from peer.");
-										
-										key.cancel();
 									}
 								}
 							}
@@ -602,6 +613,7 @@ public class BitTortoise
 										{
 											removePeer(p, pendingPeerMap);
 										}
+										connectedIPs.remove(p.ip);
 										key.cancel();
 										numConnections--;
 									}
@@ -618,6 +630,7 @@ public class BitTortoise
 									{
 										removePeer(p, pendingPeerMap);
 									}
+									connectedIPs.remove(p.ip);
 									key.cancel();
 									numConnections--;
 								}
@@ -648,6 +661,8 @@ public class BitTortoise
 											System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + ipAndPort + "): Error closing socket!");
 										}
 										
+										connectedIPs.remove(sc.socket().getInetAddress().getHostAddress());
+										
 										numConnections--;
 									}
 								}
@@ -673,6 +688,8 @@ public class BitTortoise
 										{
 											System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + ipAndPort + "): Error closing socket!");
 										}
+										
+										connectedIPs.remove(sc.socket().getInetAddress().getHostAddress());
 										
 										numConnections--;
 									}
@@ -738,7 +755,9 @@ public class BitTortoise
 												{
 													System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + ipAndPort + "): Error closing socket!");
 												}
-
+												
+												connectedIPs.remove(sc.socket().getInetAddress().getHostAddress());
+												
 												numConnections--;
 											}
 										}
@@ -778,6 +797,11 @@ public class BitTortoise
 								pendingPeerMap.remove((SocketChannel)key.channel());
 							}
 							key.cancel();
+							try
+							{
+								connectedIPs.remove(((SocketChannel)key.channel()).socket().getInetAddress().getHostAddress());
+							}
+							catch (Exception e1) { }
 						}
 					}
 				}
@@ -796,7 +820,7 @@ public class BitTortoise
 						{
 							Peer toConnect = peerList.get(last);
 							
-							if(!activePeerMap.containsValue(toConnect) && !pendingPeerMap.containsValue(toConnect))
+							if(!connectedIPs.contains(toConnect.ip) && !activePeerMap.containsValue(toConnect) && !pendingPeerMap.containsValue(toConnect))
 							{
 								// Send handshake to peer:
 								SelectionKey temp = null;
@@ -807,6 +831,8 @@ public class BitTortoise
 									sc.configureBlocking(false);
 									
 									sc.connect(new InetSocketAddress(toConnect.ip, toConnect.port));
+									
+									connectedIPs.add(toConnect.ip);
 									
 									// Register the new connection with the selector:
 									temp = sc.register(select, SelectionKey.OP_CONNECT);
@@ -834,6 +860,8 @@ public class BitTortoise
 										temp.cancel();
 									
 									numConnections--;
+									
+									connectedIPs.remove(toConnect.ip);
 								}
 								peerList.remove(last);
 							}
