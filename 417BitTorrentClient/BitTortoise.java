@@ -447,6 +447,29 @@ public class BitTortoise
 						quitNotReceived = false;
 						break;
 					}
+					else if (read[0] == 'a') {
+						String newIP = new String(), newPort = new String();
+						boolean finishedIP = false;
+						for (int i=2;i<commandLength-2; i++) {
+							if ((char)read[i] == ':')
+							{
+								finishedIP = true;
+							} 
+							else 
+							{
+								if (!finishedIP)
+								{
+									newIP += (char)read[i];
+								} 
+								else
+								{
+									newPort += (char)read[i];
+								}
+							}
+						}
+						peerList.add(new Peer(torrentFile.info_hash_as_binary, new byte[20], new byte[20], newIP, Integer.parseInt(newPort)));
+						System.out.println("Add Peer: " + newIP + ":" + newPort);		
+					}
 				}
 				
 				finish = new Date();
