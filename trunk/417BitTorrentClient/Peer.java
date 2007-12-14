@@ -428,6 +428,13 @@ public class Peer
 							else if(br.timeModified + 2*60*1000 < now)
 							{
 								this.shouldCancel.add(br);
+								
+								if(this.myMaxRequests == BitTortoise.MIN_OUTSTANDING_REQUESTS)
+								{
+									this.shouldUninterest = true;
+								}
+								
+								this.myMaxRequests = BitTortoise.MIN_OUTSTANDING_REQUESTS;
 							}
 						}
 					}

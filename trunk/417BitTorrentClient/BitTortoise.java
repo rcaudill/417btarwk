@@ -1527,6 +1527,10 @@ public class BitTortoise
 				System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Disconnecting from peer - Received bad data");
 				return false;
 			}
+			else
+			{
+				cont = false;
+			}
 		}
 		
 		if(p.bytesLeft >= 0)
