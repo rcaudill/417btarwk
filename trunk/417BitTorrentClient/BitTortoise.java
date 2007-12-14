@@ -507,7 +507,6 @@ public class BitTortoise
 								p.shouldUnchoke = true;
 						}
 					}
-					
 					// go through and set the peers as choked if they aren't already
 					for (int j = 0; j < possiblePeers.size(); j++)
 					{
