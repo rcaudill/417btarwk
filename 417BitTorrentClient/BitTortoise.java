@@ -124,7 +124,7 @@ public class BitTortoise
 		// Verify that the correct argument(s) were used:
 		if(args.length < 1 || args.length > 9)
 		{
-			System.err.println("Usage: java BitTortoise <torrent_file> [-d <destination_file>] [-p <port>] [-v] [-s] [-c] [-r <bit tortoise resume info file>]");
+			System.out.println("Usage: java BitTortoise <torrent_file> [-d <destination_file>] [-p <port>] [-v] [-s] [-c] [-r <bit tortoise resume info file>]");
 			System.exit(1);
 		}
 		port = 6881; // default port is 6881
@@ -153,7 +153,7 @@ public class BitTortoise
 				
 				if((portIsNext && destinationFileIsNext) || (portIsNext && resumeFileIsNext) || (destinationFileIsNext && resumeFileIsNext))
 				{
-					System.err.println("java BitTortoise <torrent_file> [-d <destination_file>] [-p <port>] [-v] [-s] [-c] [-r <bit tortoise resume info file>]");
+					System.out.println("java BitTortoise <torrent_file> [-d <destination_file>] [-p <port>] [-v] [-s] [-c] [-r <bit tortoise resume info file>]");
 					System.exit(1);
 				}
 			}
@@ -178,7 +178,7 @@ public class BitTortoise
 		}
 		if(BitTortoise.initialSeeding && resumeInfoFilename != null)
 		{
-			System.err.println("java BitTortoise <torrent_file> [-d <destination_file>] [-p <port>] [-v] [-s] [-c] [-r <bit tortoise resume info file>]");
+			System.out.println("java BitTortoise <torrent_file> [-d <destination_file>] [-p <port>] [-v] [-s] [-c] [-r <bit tortoise resume info file>]");
 			System.exit(1);
 		}
 		
@@ -241,7 +241,7 @@ public class BitTortoise
 		}
 		catch(IOException e)
 		{
-			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Error creating file: " + e.getMessage());
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Error creating file: " + e.getMessage());
 			System.exit(1);
 		}
 		
@@ -322,7 +322,7 @@ public class BitTortoise
 			{
 				if(!Resumer.resumeFromStopped(resumeInfoFilename, destinationFile, BitTortoise.torrentFile, BitTortoise.outstandingPieces, BitTortoise.completedPieces, BitTortoise.inProgress, BitTortoise.totalPieceCount))
 				{
-					System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Could not resume from the given file.");
+					System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Could not resume from the given file.");
 					System.exit(1);
 				}
 				else
@@ -335,7 +335,7 @@ public class BitTortoise
 			{
 				if(!Resumer.checkSeed(destinationFile, BitTortoise.torrentFile))
 				{
-					System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Seed file failed SHA1 hash check.");
+					System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Seed file failed SHA1 hash check.");
 					System.exit(1);
 				}
 				else
@@ -399,11 +399,11 @@ public class BitTortoise
 		}
 		catch (UnknownHostException e)
 		{
-			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Tracker is an unknown host: " + e.getMessage());
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Tracker is an unknown host: " + e.getMessage());
 		}
 		catch (IOException e) 
 		{
-			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Error connecting to or reading from Tracker: " + e.getMessage());
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Error connecting to or reading from Tracker: " + e.getMessage());
 		}
 
 		if(BitTortoise.verbose)
@@ -605,7 +605,7 @@ public class BitTortoise
 									}
 									catch(IOException e)
 									{
-										System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Error receiving new connection from peer.");
+										System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Error receiving new connection from peer.");
 									}
 								}
 							}
@@ -633,7 +633,7 @@ public class BitTortoise
 									}
 									else
 									{
-										System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Could not open new connection to peer.");
+										System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Could not open new connection to peer.");
 										
 										if(pendingPeerMap.containsValue(p))
 										{
@@ -646,7 +646,7 @@ public class BitTortoise
 								}
 								catch(IOException e)
 								{
-									System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Could not open new connection to peer.  " + e.getMessage());
+									System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Could not open new connection to peer.  " + e.getMessage());
 									
 									if(activePeerMap.containsValue(p))
 									{
@@ -684,7 +684,7 @@ public class BitTortoise
 										}
 										catch(IOException e)
 										{
-											System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + ipAndPort + "): Error closing socket!");
+											System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + ipAndPort + "): Error closing socket!");
 										}
 										
 										connectedIPs.remove(sc.socket().getInetAddress().getHostAddress());
@@ -712,7 +712,7 @@ public class BitTortoise
 										}
 										catch(IOException e)
 										{
-											System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + ipAndPort + "): Error closing socket!");
+											System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + ipAndPort + "): Error closing socket!");
 										}
 										
 										connectedIPs.remove(sc.socket().getInetAddress().getHostAddress());
@@ -779,7 +779,7 @@ public class BitTortoise
 												}
 												catch(IOException e)
 												{
-													System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + ipAndPort + "): Error closing socket!");
+													System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + ipAndPort + "): Error closing socket!");
 												}
 												
 												connectedIPs.remove(sc.socket().getInetAddress().getHostAddress());
@@ -811,7 +811,7 @@ public class BitTortoise
 						}
 						catch(IOException e)
 						{
-							System.err.println("IO error - " + e.getMessage());
+							System.out.println("IO error - " + e.getMessage());
 							if(activePeerMap.containsKey((SocketChannel)key.channel()))
 							{
 								activePeerMap.get((SocketChannel)key.channel()).cleanup();
@@ -875,7 +875,7 @@ public class BitTortoise
 								}
 								catch(IOException e)
 								{
-									System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Could not open new connection to peer - " + e.getMessage());
+									System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Could not open new connection to peer - " + e.getMessage());
 									
 									if(pendingPeerMap.containsValue(toConnect))
 									{
@@ -930,7 +930,7 @@ public class BitTortoise
 		}
 		catch(IOException e)
 		{
-			System.err.println("IOException Occurred! - " + e.getMessage());
+			System.out.println("IOException Occurred! - " + e.getMessage());
 			System.exit(1);
 		}
 		
@@ -954,7 +954,7 @@ public class BitTortoise
 				}
 				catch(IOException e)
 				{
-					System.err.println("Error thrown while attempting to close SocketChannel - " + e.getMessage());
+					System.out.println("Error thrown while attempting to close SocketChannel - " + e.getMessage());
 				}
 			}
 		}
@@ -1516,7 +1516,7 @@ public class BitTortoise
 			}
 			else if(length < 0 || length > BitTortoise.block_length)
 			{
-				System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Disconnecting from peer - Received bad data");
+				System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Disconnecting from peer - Received bad data");
 				return false;
 			}
 			else
@@ -1543,7 +1543,7 @@ public class BitTortoise
 		}
 		catch(IOException e)
 		{
-			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Error occurred while getting Piece " + index + ".");
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Error occurred while getting Piece " + index + ".");
 		}
 		return MessageLibrary.getPieceMessage(index, begin, length, byteArray);
 	}
@@ -1558,7 +1558,7 @@ public class BitTortoise
 		}
 		catch(IOException e)
 		{
-			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Error occurred while storing Piece " + piece_index + ".");
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Error occurred while storing Piece " + piece_index + ".");
 			return false;
 		}
 		
@@ -1597,7 +1597,7 @@ public class BitTortoise
 				}
 				else
 				{
-					System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Error in SHA1 hash for piece " + piece_index + "!");
+					System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Error in SHA1 hash for piece " + piece_index + "!");
 					BitTortoise.outstandingPieces.get(piece_index).resetAll();
 				}
 			}

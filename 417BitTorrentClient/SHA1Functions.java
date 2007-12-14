@@ -9,7 +9,7 @@ public class SHA1Functions {
 		byte[] theText = "The Test".getBytes("8859_1");
 		getSha1Hash(theText);
 		}catch(UnsupportedEncodingException e){
-			System.err.println(e);
+			System.out.println(e);
 		}
 	}
 	
