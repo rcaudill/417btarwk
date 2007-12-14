@@ -142,7 +142,7 @@ public class BitTortoise
 					BitTortoise.verbose = true;
 				if(arg.indexOf('c') != -1)
 					BitTortoise.continueSeeding = true;
-				if(arg.indexOf('c') != -1)
+				if(arg.indexOf('s') != -1)
 					BitTortoise.initialSeeding = true;
 				if(arg.indexOf('p') != -1)
 					portIsNext = true;
@@ -340,6 +340,9 @@ public class BitTortoise
 				}
 				else
 				{
+					BitTortoise.completedPieces.set(0, BitTortoise.totalPieceCount, true);
+					BitTortoise.inProgress.set(0, BitTortoise.totalPieceCount, false);
+					
 					if(BitTortoise.verbose)
 						System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Seed file parsed.");
 				}
