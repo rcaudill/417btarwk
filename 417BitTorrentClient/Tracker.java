@@ -1,6 +1,8 @@
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.*;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -43,7 +45,12 @@ public class Tracker {
 	 * @param sentTrackerURL - the address (variables and all) to be sent to the tracker
 	 * @param sentPeerid - bittortoise's peerid
 	 */
-	public void connect(HttpURLConnection sentTrackerURL, byte[] sentPeerid){
+	public void connect(HttpURLConnection sentTrackerURL, byte[] sentPeerid)
+	{
+		connect(sentTrackerURL, sentPeerid, true);
+	}
+	
+	public void connect(HttpURLConnection sentTrackerURL, byte[] sentPeerid, boolean decodeResponse){
 		connect = sentTrackerURL;
 		
 		String local_ip = "127.0.0.1";
@@ -61,66 +68,74 @@ public class Tracker {
 			connect.setRequestMethod("GET");
 			connect.connect();
 			
-			// get's the reply from the tracker
-			InputStream in = connect.getInputStream();
-			
-			// Decode the returned message, translate it into peer objects and such.
-			Object response = Bencoder.bdecode(in);
-			if(response instanceof Map)
+			if(decodeResponse)
 			{
-				Map responseMap = (Map)response;
+				// get's the reply from the tracker
+				InputStream in = connect.getInputStream();
 				
-				if(responseMap.containsKey("failure reason"))
+				// Decode the returned message, translate it into peer objects and such.
+				Object response = Bencoder.bdecode(in);
+				if(response instanceof Map)
 				{
-					System.err.println("Tracker reported the following failure: " + responseMap.get("failure reason"));
-					System.exit(1);
-				}
-				else
-				{
-					if(responseMap.containsKey("peers"))
+					Map responseMap = (Map)response;
+					
+					if(responseMap.containsKey("failure reason"))
 					{
-						Object p = responseMap.get("peers");
-						
-						if(p instanceof List)
+						System.err.println("Tracker reported the following failure: " + responseMap.get("failure reason"));
+						System.exit(1);
+					}
+					else
+					{
+						if(responseMap.containsKey("peers"))
 						{
-							List peers = (List)p;
+							Object p = responseMap.get("peers");
 							
-							for(Object o : peers)
+							if(p instanceof List)
 							{
-								if(o instanceof Map)
+								List peers = (List)p;
+								
+								for(Object o : peers)
 								{
-									Map peerInformation = (Map)o;
-									
-									if(peerInformation.containsKey("peer id") && peerInformation.containsKey("port") && peerInformation.containsKey("ip"))
+									if(o instanceof Map)
 									{
-										if(!java.util.Arrays.equals((byte[])peerInformation.get("peer id"),peerid) && !(new String((byte[])(peerInformation.get("ip")))).equals(local_ip))
-											peerList.add(new Peer(torrentFile.info_hash_as_binary, (byte[])peerInformation.get("peer id"), peerid, new String((byte[])(peerInformation.get("ip"))), (Integer)peerInformation.get("port")));
+										Map peerInformation = (Map)o;
+										
+										if(peerInformation.containsKey("peer id") && peerInformation.containsKey("port") && peerInformation.containsKey("ip"))
+										{
+											if(!java.util.Arrays.equals((byte[])peerInformation.get("peer id"),peerid) && !(new String((byte[])(peerInformation.get("ip")))).equals(local_ip))
+												peerList.add(new Peer(torrentFile.info_hash_as_binary, (byte[])peerInformation.get("peer id"), peerid, new String((byte[])(peerInformation.get("ip"))), (Integer)peerInformation.get("port")));
+										}
+										else
+										{
+											System.err.println("Tracker gave a bad peer response.  Skipping...");
+										}
 									}
 									else
 									{
 										System.err.println("Tracker gave a bad peer response.  Skipping...");
 									}
 								}
-								else
+							}
+							else if(p instanceof byte[])
+							{
+								byte[] array = (byte[])p;
+								
+								for(int i=0; i<array.length; i+=6)
 								{
-									System.err.println("Tracker gave a bad peer response.  Skipping...");
+									String ip = ipFromBytes(array[i+0],array[i+1],array[i+2],array[i+3]);
+									if(!ip.equals(local_ip))
+									{
+										int port1 = array[i+4] & 0xff;
+										int port2 = array[i+5] & 0xff;
+										int port = port1 * 256 + port2;
+										peerList.add(new Peer(torrentFile.info_hash_as_binary, new byte[20], peerid, ip, port));
+									}
 								}
 							}
-						}
-						else if(p instanceof byte[])
-						{
-							byte[] array = (byte[])p;
-							
-							for(int i=0; i<array.length; i+=6)
+							else
 							{
-								String ip = ipFromBytes(array[i+0],array[i+1],array[i+2],array[i+3]);
-								if(!ip.equals(local_ip))
-								{
-									int port1 = array[i+4] & 0xff;
-									int port2 = array[i+5] & 0xff;
-									int port = port1 * 256 + port2;
-									peerList.add(new Peer(torrentFile.info_hash_as_binary, new byte[20], peerid, ip, port));
-								}
+								System.err.println("Tracker returned no peers.");
+								System.exit(1);
 							}
 						}
 						else
@@ -128,57 +143,98 @@ public class Tracker {
 							System.err.println("Tracker returned no peers.");
 							System.exit(1);
 						}
-					}
-					else
-					{
-						System.err.println("Tracker returned no peers.");
-						System.exit(1);
-					}
-					
-					if(responseMap.containsKey("interval"))
-					{
-						interval = (Integer)responseMap.get("interval");
-					}
-					
-					if(responseMap.containsKey("min interval"))
-					{
-						min_interval = (Integer)responseMap.get("min interval");
-					}
-					
-					if(responseMap.containsKey("tracker id"))
-					{
-						tracker_id = new String((byte[])responseMap.get("tracker id"));
-					}
-					
-					if(responseMap.containsKey("complete"))
-					{
-						complete = (Integer)responseMap.get("complete");
-					}
-					
-					if(responseMap.containsKey("incomplete"))
-					{
-						incomplete = (Integer)responseMap.get("incomplete");
-					}
-					
-					if(responseMap.containsKey("warning message"))
-					{
-						System.err.println("Tracker Warning: " + new String((byte[])responseMap.get("warning message")));
+						
+						if(responseMap.containsKey("interval"))
+						{
+							interval = (Integer)responseMap.get("interval");
+						}
+						
+						if(responseMap.containsKey("min interval"))
+						{
+							min_interval = (Integer)responseMap.get("min interval");
+						}
+						
+						if(responseMap.containsKey("tracker id"))
+						{
+							tracker_id = new String((byte[])responseMap.get("tracker id"));
+						}
+						
+						if(responseMap.containsKey("complete"))
+						{
+							complete = (Integer)responseMap.get("complete");
+						}
+						
+						if(responseMap.containsKey("incomplete"))
+						{
+							incomplete = (Integer)responseMap.get("incomplete");
+						}
+						
+						if(responseMap.containsKey("warning message"))
+						{
+							System.err.println("Tracker Warning: " + new String((byte[])responseMap.get("warning message")));
+						}
 					}
 				}
+				else
+				{
+					System.err.println("Tracker returned an unexpected type.");
+					System.exit(1);
+				}
+				in.close();
 			}
-			else
-			{
-				System.err.println("Tracker returned an unexpected type.");
-				System.exit(1);
-			}
-			in.close();
 			connect.disconnect();
-		} catch (ProtocolException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+		}
+		catch (ProtocolException e)
+		{
+			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": " + e.getMessage());
+		}
+		catch (IOException e)
+		{
+			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": " + e.getMessage());
+		}
+	}
+	
+	public void alertCompleted(long totalDown, long totalUp, byte[] peer_id, int port)
+	{
+		try
+		{
+			HttpURLConnection tempConnection = (HttpURLConnection)(new URL(torrentFile.tracker_url + "?" +
+					"info_hash=" + torrentFile.info_hash_as_url + "&" +
+					"downloaded=" + totalDown + "&" +
+					"uploaded=" + totalUp + "&" +
+					"left=" + torrentFile.file_length + "&" +
+					"event=completed" + "&" +
+					"peer_id=" + TorrentFileHandler.byteArrayToURLString(peer_id) + "&" +
+					((this.tracker_id == null)? ("") : ("tracker_id=" + this.tracker_id + "&")) +
+					"port=" + port).openConnection());
+			
+			this.connect(tempConnection, peer_id, false);
+		}
+		catch(IOException e)
+		{
+			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Unable to alert tracker that this download has completed.");
+		}
+	}
+	
+	public void alertStopped(long totalDown, long totalUp, byte[] peer_id, int port)
+	{
+		try
+		{
+			HttpURLConnection tempConnection = (HttpURLConnection)(new URL(torrentFile.tracker_url + "?" +
+					"info_hash=" + torrentFile.info_hash_as_url + "&" +
+					"downloaded=" + totalDown + "&" +
+					"uploaded=" + totalUp + "&" +
+					"left=" + torrentFile.file_length + "&" +
+					"event=stopped" + "&" +
+					"peer_id=" + TorrentFileHandler.byteArrayToURLString(peer_id) + "&" +
+					((this.tracker_id == null)? ("") : ("tracker_id=" + this.tracker_id + "&")) +
+					"port=" + port).openConnection());
+			
+			this.connect(tempConnection, peer_id, false);
+		}
+		catch(IOException e)
+		{
+			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Unable to alert tracker that this download has stopped.");
 		}
 	}
 	

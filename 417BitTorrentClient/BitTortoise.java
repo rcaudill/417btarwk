@@ -926,21 +926,6 @@ public class BitTortoise
 					}
 					BitTortoise.lastTrackerCommunication = (new Date()).getTime();
 				}
-				
-				if(!isIncomplete)
-				{
-					for(Map.Entry<SocketChannel, Peer> ent : activePeerMap.entrySet())
-					{
-						try
-						{
-							ent.getKey().close();
-						}
-						catch(IOException e)
-						{
-							System.err.println("Error thrown while attempting to close SocketChannel - " + e.getMessage());
-						}
-					}
-				}
 			}
 		}
 		catch(IOException e)
@@ -959,52 +944,33 @@ public class BitTortoise
 		
 		
 		
+		if(!BitTortoise.isIncomplete)
+		{
+			for(Map.Entry<SocketChannel, Peer> ent : activePeerMap.entrySet())
+			{
+				try
+				{
+					ent.getKey().close();
+				}
+				catch(IOException e)
+				{
+					System.err.println("Error thrown while attempting to close SocketChannel - " + e.getMessage());
+				}
+			}
+		}
+		
 		long timeTaken = (new Date()).getTime() - startTime;
 		
 		if(!BitTortoise.isIncomplete)
 		{
-			try
-			{
-				HttpURLConnection tempConnection = (HttpURLConnection)(new URL(torrentFile.tracker_url + "?" +
-						"info_hash=" + torrentFile.info_hash_as_url + "&" +
-						"downloaded=" + BitTortoise.totalDownloaded + "&" +
-						"uploaded=" + BitTortoise.totalUploaded + "&" +
-						"left=" + torrentFile.file_length + "&" +
-						"event=completed" + "&" +
-						"peer_id=" + TorrentFileHandler.byteArrayToURLString(my_peer_id) + "&" +
-						((tracker.tracker_id == null)? ("") : ("tracker_id=" + tracker.tracker_id + "&")) +
-						"port=" + port).openConnection());
-				
-				tracker.connect(tempConnection,my_peer_id);
-			}
-			catch(IOException e)
-			{
-				System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Unable to alert tracker that this download has completed.");
-			}
+			tracker.alertCompleted(BitTortoise.totalDownloaded, BitTortoise.totalUploaded, my_peer_id, port);
 			
 			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Success!");
 			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": File received in " + timeTaken / 1000 + " seconds (overall rate: " + ((((double)BitTortoise.torrentFile.file_length) / ((double)timeTaken)) * (((double)1000.0) / ((double)1024.0))) + " kB/s).");
 		}
 		else if(!BitTortoise.quitNotReceived)
 		{
-			try
-			{
-				HttpURLConnection tempConnection = (HttpURLConnection)(new URL(torrentFile.tracker_url + "?" +
-						"info_hash=" + torrentFile.info_hash_as_url + "&" +
-						"downloaded=" + BitTortoise.totalDownloaded + "&" +
-						"uploaded=" + BitTortoise.totalUploaded + "&" +
-						"left=" + torrentFile.file_length + "&" +
-						"event=stopped" + "&" +
-						"peer_id=" + TorrentFileHandler.byteArrayToURLString(my_peer_id) + "&" +
-						((tracker.tracker_id == null)? ("") : ("tracker_id=" + tracker.tracker_id + "&")) +
-						"port=" + port).openConnection());
-				
-				tracker.connect(tempConnection,my_peer_id);
-			}
-			catch(IOException e)
-			{
-				System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Unable to alert tracker that this download has stopped.");
-			}
+			tracker.alertStopped(BitTortoise.totalDownloaded, BitTortoise.totalUploaded, my_peer_id, port);
 			
 			// Attempt to save the current status to resume from:
 			if(Resumer.saveStatus(destinationFileName + ".btri", BitTortoise.outstandingPieces))
