@@ -71,6 +71,8 @@ public class Peer
 	public ByteBuffer sendBuffer;
 	public int unsent;
 	
+	public int myMaxRequests;
+	
 	private boolean unsentIsPiece;
 	
 	public BitSet advertisedPieces; // Pieces that we (this client) have advertised to other peers
@@ -100,6 +102,8 @@ public class Peer
 		
 		this.readBuffer = ByteBuffer.allocate(BYTES_TO_ALLOCATE);
 		this.bytesLeft = 0;
+		
+		this.myMaxRequests = BitTortoise.MIN_OUTSTANDING_REQUESTS;
 		
 		this.sendBuffer = null;
 		this.unsent = 0;

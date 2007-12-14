@@ -23,7 +23,9 @@ public class BitTortoise
 {
 	public static boolean verbose = false;
 	
-	public static final int MAX_OUTSTANDING_REQUESTS = 100;
+	public static final int MAX_OUTSTANDING_REQUESTS = 200;
+	public static final int MIN_OUTSTANDING_REQUESTS = 5;
+	public static final int OUTSTANDING_REQUEST_RATE = 2;
 	
 	private static TorrentFile torrentFile; // the object into which the .torrent file is b-decoded
 	private static RandomAccessFile destinationFile; // The file into which we are writing
@@ -1520,7 +1522,7 @@ public class BitTortoise
 					}
 				}
 			}
-			else
+			else if(length < 0 || length > BitTortoise.block_length)
 			{
 				System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Disconnecting from peer - Received bad data");
 				return false;
