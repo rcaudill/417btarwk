@@ -81,7 +81,7 @@ public class Tracker {
 					
 					if(responseMap.containsKey("failure reason"))
 					{
-						System.err.println("Tracker reported the following failure: " + responseMap.get("failure reason"));
+						System.out.println("Tracker reported the following failure: " + responseMap.get("failure reason"));
 						System.exit(1);
 					}
 					else
@@ -107,12 +107,12 @@ public class Tracker {
 										}
 										else
 										{
-											System.err.println("Tracker gave a bad peer response.  Skipping...");
+											System.out.println("Tracker gave a bad peer response.  Skipping...");
 										}
 									}
 									else
 									{
-										System.err.println("Tracker gave a bad peer response.  Skipping...");
+										System.out.println("Tracker gave a bad peer response.  Skipping...");
 									}
 								}
 							}
@@ -134,13 +134,13 @@ public class Tracker {
 							}
 							else
 							{
-								System.err.println("Tracker returned no peers.");
+								System.out.println("Tracker returned no peers.");
 								System.exit(1);
 							}
 						}
 						else
 						{
-							System.err.println("Tracker returned no peers.");
+							System.out.println("Tracker returned no peers.");
 							System.exit(1);
 						}
 						
@@ -171,13 +171,13 @@ public class Tracker {
 						
 						if(responseMap.containsKey("warning message"))
 						{
-							System.err.println("Tracker Warning: " + new String((byte[])responseMap.get("warning message")));
+							System.out.println("Tracker Warning: " + new String((byte[])responseMap.get("warning message")));
 						}
 					}
 				}
 				else
 				{
-					System.err.println("Tracker returned an unexpected type.");
+					System.out.println("Tracker returned an unexpected type.");
 					System.exit(1);
 				}
 				in.close();
@@ -186,11 +186,11 @@ public class Tracker {
 		}
 		catch (ProtocolException e)
 		{
-			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": " + e.getMessage());
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": " + e.getMessage());
 		}
 		catch (IOException e)
 		{
-			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": " + e.getMessage());
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": " + e.getMessage());
 		}
 	}
 	
@@ -212,7 +212,7 @@ public class Tracker {
 		}
 		catch(IOException e)
 		{
-			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Unable to alert tracker that this download has completed.");
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Unable to alert tracker that this download has completed.");
 		}
 	}
 	
@@ -234,7 +234,7 @@ public class Tracker {
 		}
 		catch(IOException e)
 		{
-			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Unable to alert tracker that this download has stopped.");
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Unable to alert tracker that this download has stopped.");
 		}
 	}
 	

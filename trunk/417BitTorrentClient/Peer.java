@@ -124,7 +124,7 @@ public class Peer
 		}
 		catch(Exception e)
 		{
-			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Failed to initialze peer. Check for variable size overflow");
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Failed to initialze peer. Check for variable size overflow");
 			System.exit(1);
 		}
 		
@@ -148,7 +148,7 @@ public class Peer
 		}
 		catch(Exception e)
 		{
-			System.err.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Failed to create peer handshake.");
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Failed to create peer handshake.");
 			System.exit(1);
 		}
 	}
@@ -257,7 +257,7 @@ public class Peer
 						int sent = sc.write(this.sendBuffer);
 						this.unsent = bytesToSend.length - sent;
 						
-						this.advertisedPieces.and(receivedPieces);
+						this.advertisedPieces.or(receivedPieces);
 						
 						this.sent_bitfield = true;
 						
