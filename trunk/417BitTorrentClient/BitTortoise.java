@@ -21,7 +21,8 @@ import java.text.*;
 
 public class BitTortoise
 {
-	public static boolean verbose = false;
+	public static boolean verbose;
+	public static boolean useExtenstions;
 	
 	public static final int MAX_OUTSTANDING_REQUESTS = 200;
 	public static final int MIN_OUTSTANDING_REQUESTS = 5;
@@ -44,13 +45,14 @@ public class BitTortoise
 	public static int totalPieceCount;
 	
 	/**
-	 * Usage: "java BitTortoise <torrent_file> [-d <destination_file>] [-p <port>] [-v] [-s] [-c] [-r <bit tortoise resume info file>]" 
+	 * Usage: "java BitTortoise <torrent_file> [-d <destination_file>] [-p <port>] [-v] [-s] [-c] [-n] [-r <bit tortoise resume info file>]" 
 	 * -d means that you want the file to use the given filename
 	 * -p means that you want to use the given port
 	 * -v means that you want to run in verbose mode
 	 * -s means that you want to start out seeding
 	 * -c means that you want to continue seeding when done with the transfer
 	 * -r means that you want to use the given resume info file (and are resuming an incomplete download)
+	 * -n means that you DO NOT want to use the extensions that we have added to the program
 	 * 
 	 * @param args
 	 */
@@ -85,7 +87,7 @@ public class BitTortoise
 		long startTime = (new Date()).getTime();
 		
 		// State variables:
-		totalPieceCount = 0;
+		BitTortoise.totalPieceCount = 0;
 		Map<SocketChannel, Peer> activePeerMap = new HashMap<SocketChannel, Peer>();
 		Map<SocketChannel, Peer> pendingPeerMap = new HashMap<SocketChannel, Peer>();
 		
@@ -124,13 +126,16 @@ public class BitTortoise
 		// Verify that the correct argument(s) were used:
 		if(args.length < 1 || args.length > 9)
 		{
-			System.out.println("Usage: java BitTortoise <torrent_file> [-d <destination_file>] [-p <port>] [-v] [-s] [-c] [-r <bit tortoise resume info file>]");
+			System.out.println("Usage: java BitTortoise <torrent_file> [-d <destination_file>] [-p <port>] [-v] [-s] [-c] [-n] [-r <bit tortoise resume info file>]");
 			System.exit(1);
 		}
 		port = 6881; // default port is 6881
 		
 		String destinationFileName = null;
 		
+		
+		BitTortoise.verbose = false;
+		BitTortoise.useExtenstions = true;
 		boolean destinationFileIsNext = false;
 		boolean portIsNext = false;
 		boolean resumeFileIsNext = false;
@@ -150,10 +155,12 @@ public class BitTortoise
 					destinationFileIsNext = true;
 				if(arg.indexOf('r') != -1)
 					resumeFileIsNext = true;
+				if(arg.indexOf('n') != -1)
+					BitTortoise.useExtenstions = false;
 				
 				if((portIsNext && destinationFileIsNext) || (portIsNext && resumeFileIsNext) || (destinationFileIsNext && resumeFileIsNext))
 				{
-					System.out.println("java BitTortoise <torrent_file> [-d <destination_file>] [-p <port>] [-v] [-s] [-c] [-r <bit tortoise resume info file>]");
+					System.out.println("java BitTortoise <torrent_file> [-d <destination_file>] [-p <port>] [-v] [-s] [-c] [-n] [-r <bit tortoise resume info file>]");
 					System.exit(1);
 				}
 			}
@@ -192,7 +199,7 @@ public class BitTortoise
 		
 		
 		// Parse the torrent file.
-		torrentFile = new TorrentFile();
+		BitTortoise.torrentFile = new TorrentFile();
 		// Note: this was put in a try block because this sometimes breaks when reading a bad torrent file
 		try
 		{
@@ -205,9 +212,9 @@ public class BitTortoise
 			System.exit(1);
 		}
 		
-		totalPieceCount = ((int)torrentFile.file_length/torrentFile.piece_length) + (((torrentFile.file_length % torrentFile.piece_length) == 0)? (0) : (1));
-		completedPieces = new BitSet(totalPieceCount);
-		inProgress = new BitSet(totalPieceCount);
+		BitTortoise.totalPieceCount = ((int)BitTortoise.torrentFile.file_length/BitTortoise.torrentFile.piece_length) + (((BitTortoise.torrentFile.file_length % BitTortoise.torrentFile.piece_length) == 0)? (0) : (1));
+		BitTortoise.completedPieces = new BitSet(BitTortoise.totalPieceCount);
+		BitTortoise.inProgress = new BitSet(BitTortoise.totalPieceCount);
 		
 		if(BitTortoise.verbose)
 			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Finished parsing torrent file.");
@@ -556,8 +563,7 @@ public class BitTortoise
 						}
 						BitTortoise.totalDownloaded += p.bytesReadThisRound;
 						BitTortoise.totalUploaded += p.bytesSentThisRound;
-						p.bytesReadThisRound = 0;
-						p.bytesSentThisRound = 0;
+						p.finalizeRound();
 					}
 					start = new Date();
 				}
@@ -968,7 +974,8 @@ public class BitTortoise
 			tracker.alertCompleted(BitTortoise.totalDownloaded, BitTortoise.totalUploaded, my_peer_id, port);
 			
 			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Success!");
-			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": File received in " + timeTaken / 1000 + " seconds (overall rate: " + ((((double)BitTortoise.torrentFile.file_length) / ((double)timeTaken)) * (((double)1000.0) / ((double)1024.0))) + " kB/s).");
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": File received in " + timeTaken / 1000 + " seconds. Average download rate: " + ((((double)BitTortoise.torrentFile.file_length) / ((double)timeTaken)) * (((double)1000.0) / ((double)1024.0))) + " kB/s.");
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Average upload rate: " + ((((double)BitTortoise.totalUploaded) / ((double)timeTaken)) * (((double)1000.0) / ((double)1024.0))) + " kB/s.");
 		}
 		else if(!BitTortoise.quitNotReceived)
 		{
@@ -1154,8 +1161,14 @@ public class BitTortoise
 			// If we have finished receiving this Piece message:
 			if(p.blockRequest == null)
 			{
+				if(p.numRequestsCompletedThisRound == p.myMaxRequests && p.myMaxRequests < BitTortoise.MAX_OUTSTANDING_REQUESTS)
+				{
+					p.myMaxRequests *= BitTortoise.OUTSTANDING_REQUEST_RATE;
+				}
+				
 				p.emptyFinishedRequests();
-				p.fill(BitTortoise.completedPieces,BitTortoise.inProgress, BitTortoise.outstandingPieces);
+				p.fill(BitTortoise.completedPieces, BitTortoise.inProgress, BitTortoise.outstandingPieces);
+				
 				if(BitTortoise.verbose)
 					System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Received Piece (" + tempPiece + "," + tempOffset + "," + tempLength + ") message (end).");
 			}

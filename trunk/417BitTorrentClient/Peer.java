@@ -72,6 +72,7 @@ public class Peer
 	public int unsent;
 	
 	public int myMaxRequests;
+	public int numRequestsCompletedThisRound;
 	
 	private boolean unsentIsPiece;
 	
@@ -104,6 +105,7 @@ public class Peer
 		this.bytesLeft = 0;
 		
 		this.myMaxRequests = BitTortoise.MIN_OUTSTANDING_REQUESTS;
+		this.numRequestsCompletedThisRound = 0;
 		
 		this.sendBuffer = null;
 		this.unsent = 0;
@@ -167,6 +169,20 @@ public class Peer
 			}
 		}
 		this.sendRequests.clear();
+	}
+	
+	/**
+	 * 
+	 */
+	public void finalizeRound()
+	{
+		this.bytesReadThisRound = 0;
+		this.bytesSentThisRound = 0;
+		
+		if(this.numRequestsCompletedThisRound/BitTortoise.OUTSTANDING_REQUEST_RATE > this.myMaxRequests)
+			this.myMaxRequests /= BitTortoise.OUTSTANDING_REQUEST_RATE;
+		
+		this.numRequestsCompletedThisRound = 0;
 	}
 	
 	/**
@@ -589,14 +605,14 @@ public class Peer
 		// Favor requests that have been completed:
 		// add block requests to a peer until it has its maximum outstanding requests
 		// it's almost totally random, which is better than linear, but not as good as rarest first
-		while(betterChoices.isEmpty() == false && this.sendRequests.size() < BitTortoise.MAX_OUTSTANDING_REQUESTS)
+		while(betterChoices.isEmpty() == false && this.sendRequests.size() < ((BitTortoise.useExtenstions)? (this.myMaxRequests) : (BitTortoise.MAX_OUTSTANDING_REQUESTS)))
 		{
 			int i = betterChoices.nextSetBit((int)(Math.random()*(betterChoices.length())));
 			if(i != -1)
 			{
 				for(BlockRequest br : outstandingPieces.get(i).blocks)
 				{
-					if(this.sendRequests.size() == BitTortoise.MAX_OUTSTANDING_REQUESTS)
+					if(this.sendRequests.size() == ((BitTortoise.useExtenstions)? (this.myMaxRequests) : (BitTortoise.MAX_OUTSTANDING_REQUESTS)))
 						break;
 					if(br.status == BlockRequest.UNASSIGNED)
 					{
@@ -610,14 +626,14 @@ public class Peer
 		}
 		
 		// If there are no better choices left, and our sendRequests list is not yet large enough to our liking:
-		while(choices.isEmpty() == false && this.sendRequests.size() < BitTortoise.MAX_OUTSTANDING_REQUESTS)
+		while(choices.isEmpty() == false && this.sendRequests.size() < ((BitTortoise.useExtenstions)? (this.myMaxRequests) : (BitTortoise.MAX_OUTSTANDING_REQUESTS)))
 		{
 			int i = choices.nextSetBit((int)(Math.random()*(choices.length())));
 			if(i != -1)
 			{
 				for(BlockRequest br : outstandingPieces.get(i).blocks)
 				{
-					if(this.sendRequests.size() == BitTortoise.MAX_OUTSTANDING_REQUESTS)
+					if(this.sendRequests.size() == ((BitTortoise.useExtenstions)? (this.myMaxRequests) : (BitTortoise.MAX_OUTSTANDING_REQUESTS)))
 						break;
 					if(br.status == BlockRequest.UNASSIGNED)
 					{
