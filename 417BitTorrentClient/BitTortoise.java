@@ -805,7 +805,10 @@ public class BitTortoise
 								{
 									// Open a new connection to the peer, set to not block:
 									SocketChannel sc = SocketChannel.open();
+									sc.socket().bind(new InetSocketAddress(port));
+									
 									sc.configureBlocking(false);
+									
 									sc.connect(new InetSocketAddress(toConnect.ip, toConnect.port));
 									
 									// Register the new connection with the selector:
