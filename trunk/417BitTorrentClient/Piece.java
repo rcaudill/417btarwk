@@ -4,10 +4,12 @@ import java.util.ArrayList;
 public class Piece {
 	ArrayList<BlockRequest> blocks;
 	int pieceNum;
+	int commonality;
 	
 	public Piece(int pieceNum) {
 		blocks = new ArrayList<BlockRequest>();
 		this.pieceNum = pieceNum;
+		this.commonality = 0;
 	}
 	
 	public BlockRequest coalesceBlock(BlockRequest br) {

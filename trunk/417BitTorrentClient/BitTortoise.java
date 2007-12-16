@@ -31,6 +31,7 @@ public class BitTortoise
 	private static TorrentFile torrentFile; // the object into which the .torrent file is b-decoded
 	private static RandomAccessFile destinationFile; // The file into which we are writing
 	private static Map<Integer, Piece> outstandingPieces = new HashMap<Integer, Piece>();
+	private static ArrayList<Piece> rarity = new ArrayList<Piece>(); //orders pieces by rarity
 	private static int block_length = 16384; //The reality is near all clients will now use 2^14 (16KB) requests. Due to clients that enforce that size, it is recommended that implementations make requests of that size. (TheoryOrg spec)
 	private static BitSet completedPieces; // Whether the Pieces/blocks of the file are completed or not
 	private static BitSet inProgress;
@@ -356,6 +357,10 @@ public class BitTortoise
 			}
 		}
 		
+		//fills up rarity with all outstanding pieces
+		for(Map.Entry<Integer, Piece> e : outstandingPieces.entrySet()){
+			rarity.add(e.getValue());
+		}
 		
 		
 		// END of SECTION: fill outstandingPieces map with pieces that need to be finished
@@ -813,7 +818,7 @@ public class BitTortoise
 								if(activePeerMap.containsKey(sc))
 								{
 									Peer writablePeer = activePeerMap.get(sc);
-									writablePeer.sendMessage(sc, BitTortoise.completedPieces, BitTortoise.inProgress, BitTortoise.outstandingPieces);
+									writablePeer.sendMessage(sc, BitTortoise.completedPieces, BitTortoise.inProgress, BitTortoise.rarity);
 								}
 							}
 						}
@@ -1167,7 +1172,7 @@ public class BitTortoise
 				}
 				
 				p.emptyFinishedRequests();
-				p.fill(BitTortoise.completedPieces, BitTortoise.inProgress, BitTortoise.outstandingPieces);
+				p.fill(BitTortoise.completedPieces, BitTortoise.inProgress, BitTortoise.rarity);
 				
 				if(BitTortoise.verbose)
 					System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Received Piece (" + tempPiece + "," + tempOffset + "," + tempLength + ") message (end).");
@@ -1260,7 +1265,7 @@ public class BitTortoise
 					p.peer_choking = false;
 					
 					p.emptyFinishedRequests();
-					p.fill(BitTortoise.completedPieces,BitTortoise.inProgress, BitTortoise.outstandingPieces);
+					p.fill(BitTortoise.completedPieces,BitTortoise.inProgress, BitTortoise.rarity);
 					
 					// Perform state cleanup:
 					p.readBuffer.position(5);
@@ -1320,6 +1325,10 @@ public class BitTortoise
 						int piece_index = p.readBuffer.getInt(5);
 						p.completedPieces.set(piece_index, true);
 						
+						if(outstandingPieces.containsKey(piece_index)){
+							outstandingPieces.get(piece_index).commonality++;
+						}
+						
 						// Set us to interested if they have something we want (and we are not already interested):
 						BitSet need = (BitSet)p.completedPieces.clone();
 						need.andNot(BitTortoise.completedPieces);
@@ -1353,6 +1362,12 @@ public class BitTortoise
 						p.readBuffer.position(5);
 						p.readBuffer.get(ba);
 						p.completedPieces = BitTortoise.bitSetFromByteArray(ba);
+						
+						//update rarity of pieces
+						for(int i=p.completedPieces.nextSetBit(0);i<=0;i=p.completedPieces.nextSetBit(i+1)){
+							if(outstandingPieces.containsKey(i))
+								outstandingPieces.get(i).commonality++;
+						}
 						
 						// Set us to interested if they have something we want (and we are not already interested):
 						BitSet need = (BitSet)p.completedPieces.clone();
@@ -1602,7 +1617,8 @@ public class BitTortoise
 			{
 				if (Arrays.equals(BitTortoise.getSha1FromFile(piece_index, BitTortoise.totalPieceCount, BitTortoise.destinationFile, BitTortoise.torrentFile), (byte[])BitTortoise.torrentFile.piece_hash_values_as_binary.get(piece_index)))
 				{
-					BitTortoise.outstandingPieces.remove(piece_index);
+					Piece temp = BitTortoise.outstandingPieces.remove(piece_index);
+					BitTortoise.rarity.remove(temp);
 					BitTortoise.completedPieces.set(piece_index);
 					if (BitTortoise.outstandingPieces.isEmpty())
 					{

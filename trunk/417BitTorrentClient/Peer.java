@@ -226,7 +226,7 @@ public class Peer
 	 * @param completedPieces the pieces that we have already completed
 	 * @return whether there were any IOExceptions thrown that mean we should stop communicating with this peer
 	 */
-	public boolean sendMessage(SocketChannel sc, BitSet receivedPieces, BitSet inProgress, Map<Integer,Piece> outstandingPieces)
+	public boolean sendMessage(SocketChannel sc, BitSet receivedPieces, BitSet inProgress, ArrayList<Piece> rarity)
 	{
 		// Determine what it is that we need to send, if anything:
 		if(this.unsent > 0)
@@ -401,7 +401,7 @@ public class Peer
 						this.sendRequests.remove(br);
 						this.shouldCancel.remove(0);
 						
-						this.fill(receivedPieces, inProgress, outstandingPieces);
+						this.fill(receivedPieces, inProgress, rarity);
 					}
 					catch(IOException e)
 					{
@@ -491,7 +491,7 @@ public class Peer
 						if(this.am_interested && !this.peer_choking)
 						{
 							this.emptyFinishedRequests();
-							this.fill(receivedPieces, inProgress, outstandingPieces);
+							this.fill(receivedPieces, inProgress, rarity);
 						}
 						// Advertise new blocks that we have gotten
 						BitSet newPiecesToAdvertise = (BitSet)receivedPieces.clone();
@@ -592,10 +592,37 @@ public class Peer
 		return true;
 	}
 	
-	public boolean fill(BitSet receivedPieces, BitSet inProgress, Map<Integer,Piece> outstandingPieces)
+	//public boolean fill(BitSet receivedPieces, BitSet inProgress, Map<Integer,Piece> outstandingPieces)
+	public boolean fill(BitSet receivedPieces, BitSet inProgress, ArrayList<Piece> rarity)
 	{
+		int i=0;
 		boolean madeChanges = false;
+		//make the rarest pieces first
+		Collections.sort(rarity, new rarityComparator());
+		int rareSize = rarity.size();
+		while(i < rareSize && this.sendRequests.size() < ((BitTortoise.useExtenstions)? (this.myMaxRequests) : (BitTortoise.MAX_OUTSTANDING_REQUESTS))){
+			int piecenum = rarity.get(i).pieceNum;
+			//if the peer contains this rare piece, fill requests, else increment i to go to the next rarest piece
+			if(this.completedPieces.get(piecenum)){
+				for(BlockRequest br : rarity.get(i).blocks)
+				{
+					if(this.sendRequests.size() == ((BitTortoise.useExtenstions)? (this.myMaxRequests) : (BitTortoise.MAX_OUTSTANDING_REQUESTS)))
+						break;
+					if(br.status == BlockRequest.UNASSIGNED)
+					{
+						br.status = BlockRequest.UNREQUESTED;
+						this.sendRequests.add(br);
+						madeChanges = true;
+					}
+				}
+			}
+			i++;
+		}
 		
+		return madeChanges;
+		
+		
+		/* OLD CODE, KEPT IN CASE THIS MESSES EVERYTHING UP
 		BitSet choices = (BitSet)this.completedPieces.clone();
 		choices.andNot(receivedPieces);
 		
@@ -647,7 +674,7 @@ public class Peer
 			}
 		}
 		
-		return madeChanges;
+		return madeChanges;*/
 	}
 	
 	public void emptyFinishedRequests()
