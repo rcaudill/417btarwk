@@ -19,14 +19,17 @@ public class Tracker {
 	HttpURLConnection connect;
 	TorrentFile torrentFile;
 	byte[] peerid;
+	String key;
 	
 	public Tracker(TorrentFile torrentFile){
 		peerList = new LinkedList<Peer>();
+		interval = 5;
 		min_interval = 5;
 		tracker_id = null;
 		complete = 0;
 		incomplete = 0;
 		this.torrentFile = torrentFile;
+		this.key = ""; 
 	}
 	
 	/**
@@ -68,11 +71,11 @@ public class Tracker {
 			connect.setRequestMethod("GET");
 			connect.connect();
 			
+			// get's the reply from the tracker
+			InputStream in = connect.getInputStream();
+			
 			if(decodeResponse)
 			{
-				// get's the reply from the tracker
-				InputStream in = connect.getInputStream();
-				
 				// Decode the returned message, translate it into peer objects and such.
 				Object response = Bencoder.bdecode(in);
 				if(response instanceof Map)
@@ -198,15 +201,19 @@ public class Tracker {
 	{
 		try
 		{
-			HttpURLConnection tempConnection = (HttpURLConnection)(new URL(torrentFile.tracker_url + "?" +
-					"info_hash=" + torrentFile.info_hash_as_url + "&" +
-					"downloaded=" + totalDown + "&" +
-					"uploaded=" + totalUp + "&" +
-					"left=" + torrentFile.file_length + "&" +
-					"event=completed" + "&" +
-					"peer_id=" + TorrentFileHandler.byteArrayToURLString(peer_id) + "&" +
-					((this.tracker_id == null)? ("") : ("tracker_id=" + this.tracker_id + "&")) +
-					"port=" + port).openConnection());
+			HttpURLConnection tempConnection = (HttpURLConnection)(new URL(torrentFile.tracker_url + "?" + 
+					"info_hash=" + torrentFile.info_hash_as_url + "&" + 
+					"peer_id=" + TorrentFileHandler.byteArrayToURLString(peer_id) + "&" + 
+					"port=" + port + "&" + 
+					"uploaded=" + totalUp + "&" + 
+					"downloaded=" + totalDown + "&" + 
+					"left=0" + "&" + 
+					"key=" + this.key + "&" + 
+					"event=completed" + "&" + 
+					"numwant=0" + "&" + 
+					"compact=1" + "&" + 
+					((this.tracker_id == null)? ("") : ("tracker_id=" + this.tracker_id + "&")) + 
+					"no_peer_id=1").openConnection());
 			
 			this.connect(tempConnection, peer_id, false);
 		}
@@ -220,15 +227,19 @@ public class Tracker {
 	{
 		try
 		{
-			HttpURLConnection tempConnection = (HttpURLConnection)(new URL(torrentFile.tracker_url + "?" +
-					"info_hash=" + torrentFile.info_hash_as_url + "&" +
-					"downloaded=" + totalDown + "&" +
-					"uploaded=" + totalUp + "&" +
-					"left=" + torrentFile.file_length + "&" +
-					"event=stopped" + "&" +
-					"peer_id=" + TorrentFileHandler.byteArrayToURLString(peer_id) + "&" +
-					((this.tracker_id == null)? ("") : ("tracker_id=" + this.tracker_id + "&")) +
-					"port=" + port).openConnection());
+			HttpURLConnection tempConnection = (HttpURLConnection)(new URL(torrentFile.tracker_url + "?" + 
+					"info_hash=" + torrentFile.info_hash_as_url + "&" + 
+					"peer_id=" + TorrentFileHandler.byteArrayToURLString(peer_id) + "&" + 
+					"port=" + port + "&" + 
+					"uploaded=" + totalUp + "&" + 
+					"downloaded=" + totalDown + "&" + 
+					"left=0" + "&" + 
+					"key=" + this.key + "&" + 
+					"event=stopped" + "&" + 
+					"numwant=0" + "&" + 
+					"compact=1" + "&" + 
+					((this.tracker_id == null)? ("") : ("trackerid=" + this.tracker_id + "&")) + 
+					"no_peer_id=1").openConnection());
 			
 			this.connect(tempConnection, peer_id, false);
 		}

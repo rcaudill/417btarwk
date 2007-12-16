@@ -240,6 +240,7 @@ public class Peer
 				if(this.unsentIsPiece)
 				{
 					this.bytesSentThisRound += sent;
+					BitTortoise.totalUploaded += sent;
 					
 					if(this.unsent == 0)
 					{
@@ -248,9 +249,6 @@ public class Peer
 				}
 				
 				this.lastMessageSentTime = (new Date()).getTime();
-				
-//				if(BitTortoise.verbose)
-//					System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + this.ip + ":" + this.port + "): Sent Continuation message.");
 			}
 			catch(IOException e)
 			{
@@ -468,6 +466,7 @@ public class Peer
 							this.lastMessageSentTime = (new Date()).getTime();
 							
 							this.bytesSentThisRound += sent;
+							BitTortoise.totalUploaded += sent;
 							
 							if(this.unsent == 0)
 							{

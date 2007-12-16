@@ -27,6 +27,7 @@ public class BitTortoise
 	public static final int MAX_OUTSTANDING_REQUESTS = 200;
 	public static final int MIN_OUTSTANDING_REQUESTS = 5;
 	public static final int OUTSTANDING_REQUEST_RATE = 2;
+	public static final int numToGet = 100; // try to get 100 total peers from the tracker for the list
 	
 	private static TorrentFile torrentFile; // the object into which the .torrent file is b-decoded
 	private static RandomAccessFile destinationFile; // The file into which we are writing
@@ -36,8 +37,8 @@ public class BitTortoise
 	private static BitSet completedPieces; // Whether the Pieces/blocks of the file are completed or not
 	private static BitSet inProgress;
 	private static long lastTrackerCommunication;
-	private static long totalUploaded;
-	private static long totalDownloaded;
+	public static long totalUploaded;
+	public static long totalDownloaded;
 	
 	private static boolean isIncomplete;
 	private static boolean continueSeeding;
@@ -67,12 +68,11 @@ public class BitTortoise
 		int numConnections; // the number of TCP connections we currently have with other peers
 		int port; // the port we are listening on
 		List<Peer> peerList; // list of Peer objects that we got from the tracker
-		int interval; // seconds the client should wait before sending a regular request to the tracker
-		int min_interval; // seconds the client must wait before sending a regular request to the tracker
-		String tracker_id; // a string to send back on next announcements
-		int complete; // number of seeders/peers with the entire file
-		int incomplete; // number of leechers/peers providing 0+ parts of the file (but are not seeders)
 		byte[] my_peer_id = new byte[20]; // the peer id that this client is using
+		String my_key = new String();
+		for(int i = 0; i < 8; i++)
+			my_key += Integer.toHexString((int)(Math.random() * 16.0));
+		
 		Tracker tracker = null;
 		Date start;
 		Date finish;
@@ -218,7 +218,7 @@ public class BitTortoise
 		BitTortoise.inProgress = new BitSet(BitTortoise.totalPieceCount);
 		
 		if(BitTortoise.verbose)
-			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Finished parsing torrent file.");
+			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Finished parsing torrent file.  Info Hash = " + BitTortoise.torrentFile.info_hash_as_url);
 		
 		
 		
@@ -358,7 +358,8 @@ public class BitTortoise
 		}
 		
 		//fills up rarity with all outstanding pieces
-		for(Map.Entry<Integer, Piece> e : outstandingPieces.entrySet()){
+		for(Map.Entry<Integer, Piece> e : outstandingPieces.entrySet())
+		{
 			rarity.add(e.getValue());
 		}
 		
@@ -373,36 +374,36 @@ public class BitTortoise
 		
 		// Extract a list of peers, and other information from the tracker:
 		peerList = new LinkedList<Peer>(); // List of peer objects
-		interval = 0; // seconds the client should wait before sending a regular request to the tracker
-		min_interval = 0; // seconds the client must wait before sending a regular request to the tracker
-		tracker_id = ""; // a string to send back on next announcements
-		complete = 0; // number of seeders/peers with the entire file
-		incomplete = 0; // number of leechers/peers providing 0+ parts of the file (but are not seeders)
 		try
 		{
 			tracker = new Tracker(BitTortoise.torrentFile);
+			tracker.key = my_key;
 
 			// Using the parsed torrent file, ping the tracker and get a list of peers to connect to:
-			String connectionString = BitTortoise.torrentFile.tracker_url + "?" +
-						"info_hash=" + BitTortoise.torrentFile.info_hash_as_url + "&";
+			String connectionString = BitTortoise.torrentFile.tracker_url + "?" + 
+						"info_hash=" + BitTortoise.torrentFile.info_hash_as_url + "&" + 
+						"peer_id=" + TorrentFileHandler.byteArrayToURLString(my_peer_id) + "&" + 
+						"port=" + port + "&";
 			
 			// Advertise to tracker differently if we are starting out seeding versus leeching 
 			if(BitTortoise.initialSeeding)
 			{
-				connectionString += "downloaded=" + BitTortoise.torrentFile.file_length + "&" +
-						"uploaded=0" + "&" +
+				connectionString += "uploaded=0" + "&" +
+						"downloaded=0" + "&" + 
 						"left=0" + "&";
 			}
 			else
 			{
-				connectionString += "downloaded=0" + "&" +
-						"uploaded=0" + "&" +
+				connectionString += "uploaded=0" + "&" + 
+						"downloaded=0" + "&" + 
 						"left=" + BitTortoise.torrentFile.file_length + "&";
 			}
 			
-			connectionString += "peer_id=" + TorrentFileHandler.byteArrayToURLString(my_peer_id) + "&" +
-						"event=started" + "&" +
-						"port=" + port;
+			connectionString += "key=" + my_key + "&" + 
+						"event=started" + "&" + 
+						"numwant=" + numToGet + "&" + 
+						"compact=1" + "&" + 
+						"no_peer_id=1";
 			
 			HttpURLConnection connection = (HttpURLConnection)(new URL(connectionString).openConnection());
 			tracker.connect(connection, my_peer_id);
@@ -566,11 +567,11 @@ public class BitTortoise
 						{
 							p.shouldChoke = false;
 						}
-						BitTortoise.totalDownloaded += p.bytesReadThisRound;
-						BitTortoise.totalUploaded += p.bytesSentThisRound;
 						p.finalizeRound();
 					}
 					start = new Date();
+					
+					printStatus();
 				}
 				
 				int num = select.selectNow();
@@ -918,14 +919,20 @@ public class BitTortoise
 				}
 				else if(isIncomplete && numConnections < 30 && (((new Date()).getTime() - tracker.interval * 1000 > BitTortoise.lastTrackerCommunication) || (activePeerMap.size() == 0 && pendingPeerMap.size() == 0 && ((new Date()).getTime() - tracker.min_interval * 1000 > BitTortoise.lastTrackerCommunication))))
 				{
-					HttpURLConnection tempConnection = (HttpURLConnection)(new URL(torrentFile.tracker_url + "?" +
-							"info_hash=" + torrentFile.info_hash_as_url + "&" +
-							"downloaded=" + BitTortoise.totalDownloaded + "&" +
-							"uploaded=" + BitTortoise.totalUploaded + "&" +
-							"left=" + torrentFile.file_length + "&" +
-							"peer_id=" + TorrentFileHandler.byteArrayToURLString(my_peer_id) + "&" +
-							((tracker.tracker_id == null)? ("") : ("tracker_id=" + tracker.tracker_id + "&")) +
-							"port=" + port).openConnection());
+					String connectionString = BitTortoise.torrentFile.tracker_url + "?" + 
+							"info_hash=" + BitTortoise.torrentFile.info_hash_as_url + "&" + 
+							"peer_id=" + TorrentFileHandler.byteArrayToURLString(my_peer_id) + "&" + 
+							"port=" + port + "&" + 
+							"uploaded=" + BitTortoise.totalUploaded + "&" + 
+							"downloaded=" + BitTortoise.totalDownloaded + "&" + 
+							"left=" + (BitTortoise.torrentFile.file_length - BitTortoise.totalDownloaded) + "&" + 
+							"key=" + my_key + "&" + 
+							"numwant=" + (numToGet - peerList.size()) + "&" + 
+							"compact=1" + "&" + 
+							((tracker.tracker_id == null)? ("") : ("trackerid=" + tracker.tracker_id + "&")) + 
+							"no_peer_id=1";
+					
+					HttpURLConnection tempConnection = (HttpURLConnection)(new URL(connectionString).openConnection());
 					
 					tracker.connect(tempConnection,my_peer_id);
 					
@@ -1323,10 +1330,16 @@ public class BitTortoise
 						
 						// Handle Have message:
 						int piece_index = p.readBuffer.getInt(5);
-						p.completedPieces.set(piece_index, true);
 						
-						if(outstandingPieces.containsKey(piece_index)){
-							outstandingPieces.get(piece_index).commonality++;
+						// Updated so that rarity is properly preserved for bad have messages
+						if(!p.completedPieces.get(piece_index))
+						{
+							p.completedPieces.set(piece_index, true);
+							
+							if(outstandingPieces.containsKey(piece_index))
+							{
+								outstandingPieces.get(piece_index).commonality++;
+							}
 						}
 						
 						// Set us to interested if they have something we want (and we are not already interested):
@@ -1361,12 +1374,21 @@ public class BitTortoise
 						byte[] ba = new byte[length - 1];
 						p.readBuffer.position(5);
 						p.readBuffer.get(ba);
+						
+						// This is changed so that if a client (incorrectly) sends us a new bitfield, we can preserve the correct counts
+						BitSet previousReport = (BitSet)p.completedPieces.clone();
 						p.completedPieces = BitTortoise.bitSetFromByteArray(ba);
+						BitSet newReport = (BitSet)p.completedPieces.clone();
+						
+						newReport.andNot(previousReport);
 						
 						//update rarity of pieces
-						for(int i=p.completedPieces.nextSetBit(0);i<=0;i=p.completedPieces.nextSetBit(i+1)){
+						for(int i=newReport.nextSetBit(0);i<=0;i=newReport.nextSetBit(i+1))
+						{
 							if(outstandingPieces.containsKey(i))
+							{
 								outstandingPieces.get(i).commonality++;
+							}
 						}
 						
 						// Set us to interested if they have something we want (and we are not already interested):
@@ -1601,6 +1623,7 @@ public class BitTortoise
 	public static boolean processPieceMessage(Peer p, int piece_index, int block_begin, byte[] block) {
 		// Update the number of bytes read this round for this peer:
 		p.bytesReadThisRound += block.length;
+		BitTortoise.totalDownloaded += block.length;
 		
 		// Update the last time modified:
 		p.blockRequest.timeModified = (new Date()).getTime();
@@ -1667,5 +1690,19 @@ public class BitTortoise
 		mySHA1 = SHA1Functions.getSha1Hash(entirePiece);
 		
 		return mySHA1;
+	}
+	
+	public static void printStatus()
+	{
+		for(int i = 0; i < BitTortoise.totalPieceCount; i += 25)
+		{
+			for(int j = 0; (j < 25) && (i*25 + j < BitTortoise.totalPieceCount); j ++)
+			{
+				System.out.print((BitTortoise.completedPieces.get(i*25 + j)? "*" : "." ));
+			}
+			System.out.println();
+		}
+		System.out.println("Received: " + BitTortoise.totalDownloaded + " bytes of file data.");
+		System.out.println("Sent: " + BitTortoise.totalUploaded + " bytes of file data.");
 	}
 }
