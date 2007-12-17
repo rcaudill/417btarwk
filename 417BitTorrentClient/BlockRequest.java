@@ -32,7 +32,8 @@ public class BlockRequest
 		this.timeModified = (new Date()).getTime();
 	}
 	
-	public BlockRequest(int piece, int offset, int length, BlockRequest prev, BlockRequest next) {
+	public BlockRequest(int piece, int offset, int length, BlockRequest prev, BlockRequest next)
+	{
 		this.piece = piece;
 		this.offset = offset;
 		this.length = length;
@@ -43,7 +44,8 @@ public class BlockRequest
 		this.timeModified = (new Date()).getTime();
 	}
 	
-	public BlockRequest(int piece, int offset, int length) {
+	public BlockRequest(int piece, int offset, int length)
+	{
 		this.piece = piece;
 		this.offset = offset;
 		this.length = length;

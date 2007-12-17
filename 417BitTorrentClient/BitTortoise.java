@@ -74,8 +74,8 @@ public class BitTortoise
 			my_key += Integer.toHexString((int)(Math.random() * 16.0));
 		
 		Tracker tracker = null;
-		Date start;
-		Date finish;
+		long startT;
+		long finishT;
 		BitTortoise.initialSeeding = false;
 		BitTortoise.continueSeeding = false;
 		BitTortoise.isIncomplete = true;
@@ -450,7 +450,7 @@ public class BitTortoise
 			serverChannel.register(select, SelectionKey.OP_ACCEPT);
 			
 			// Main Data processing loop:
-			start = new Date();
+			startT = new Date().getTime();
 			while((BitTortoise.isIncomplete || BitTortoise.continueSeeding) && quitNotReceived)
 			{
 				int commandLength = System.in.available();
@@ -488,11 +488,11 @@ public class BitTortoise
 					}
 				}
 				
-				finish = new Date();
-				long elapsedTimeMS = finish.getTime() - start.getTime();
+				finishT = new Date().getTime();
+				long elapsedTimeMS = finishT - startT;
 				// if ten seconds has past, reorder the top peers get a new one
 				// to opt unchoke.
-				if ((elapsedTimeMS % (10*1000)) == 0 && elapsedTimeMS != 0)
+				if (((elapsedTimeMS % (10000)) == 0) && (elapsedTimeMS != 0))
 				{
 					ArrayList<Peer> possiblePeers = new ArrayList<Peer>();
 					for(Map.Entry<SocketChannel, Peer> e : activePeerMap.entrySet())
@@ -569,7 +569,7 @@ public class BitTortoise
 						}
 						p.finalizeRound();
 					}
-					start = new Date();
+					startT = new Date().getTime();
 					
 					printStatus();
 				}
@@ -984,6 +984,7 @@ public class BitTortoise
 		if(!BitTortoise.isIncomplete)
 		{
 			tracker.alertCompleted(BitTortoise.totalDownloaded, BitTortoise.totalUploaded, my_peer_id, port);
+			tracker.alertStopped(BitTortoise.totalDownloaded, BitTortoise.totalUploaded, my_peer_id, port);
 			
 			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": Success!");
 			System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": File received in " + timeTaken / 1000 + " seconds. Average download rate: " + ((((double)BitTortoise.torrentFile.file_length) / ((double)timeTaken)) * (((double)1000.0) / ((double)1024.0))) + " kB/s.");
@@ -1432,8 +1433,7 @@ public class BitTortoise
 						
 						if(request_index == BitTortoise.totalPieceCount - 1)
 						{
-							
-							if(false)
+							if(BitTortoise.torrentFile.piece_length * request_index + request_begin + request_length > BitTortoise.torrentFile.file_length)
 								return false;
 						}
 						
@@ -1477,24 +1477,26 @@ public class BitTortoise
 							if(br.piece == piece_index && br.offset == block_begin && br.length == block_length)
 							{
 								requestExists = true;
+								p.blockRequest = br;
 								break;
 							}
 						}
 						if(!requestExists)
 							return false;
 						
-						p.blockRequest = BitTortoise.outstandingPieces.get(piece_index).getBlock(block_begin);
+						//p.blockRequest = BitTortoise.outstandingPieces.get(piece_index).getBlock(block_begin);
 						p.blockRequest.status = BlockRequest.STARTED;
 						
 						//convert bytebuffer into byte array and store it in 
-						byte [] block = new byte[p.bytesLeft - 13];
+						int amountToTransfer = Math.min(p.bytesLeft - 13, length - 9);
+						byte [] block = new byte[amountToTransfer];
 						p.readBuffer.position(13);
-						p.readBuffer.get(block, 0, p.bytesLeft - 13);
+						p.readBuffer.get(block, 0, amountToTransfer);
 						processPieceMessage(p, piece_index, block_begin, block);
 						
 						// Note: the following should really be done within "processPieceMessage" instead of here, but whatever:
 						// Perform state cleanup:
-						int amountToTrim = Math.min(length + 4, p.bytesLeft);
+						int amountToTrim = amountToTransfer + 13;
 						p.readBuffer.position(amountToTrim);
 						p.readBuffer.compact();
 						p.readBuffer.position(0);
@@ -1503,6 +1505,21 @@ public class BitTortoise
 						
 						if(BitTortoise.verbose)
 							System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Received Piece (" + piece_index + "," + block_begin + "," + block_length + ") message (beginning).");
+						
+						// If we have already finished receiving this Piece message:
+						if(p.blockRequest == null)
+						{
+							if(p.numRequestsCompletedThisRound == p.myMaxRequests && p.myMaxRequests < BitTortoise.MAX_OUTSTANDING_REQUESTS)
+							{
+								p.myMaxRequests *= BitTortoise.OUTSTANDING_REQUEST_RATE;
+							}
+							
+							p.emptyFinishedRequests();
+							p.fill(BitTortoise.completedPieces, BitTortoise.inProgress, BitTortoise.rarity);
+							
+							if(BitTortoise.verbose)
+								System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Received Piece (" + piece_index + "," + block_begin + "," + block_length + ") message (end).");
+						}
 					}
 				}
 				else if(id == 8)
@@ -1588,8 +1605,9 @@ public class BitTortoise
 		return true;
 	}
 	
-	public static byte[] getPiece(int index, int begin, int length) {
-		int fileOffset = (index * BitTortoise.torrentFile.piece_length) + begin;
+	public static byte[] getPiece(int index, int begin, int length)
+	{
+		long fileOffset = (index * ((long)BitTortoise.torrentFile.piece_length)) + begin;
 		byte[] byteArray = new byte[length];
 		try
 		{
@@ -1605,7 +1623,7 @@ public class BitTortoise
 	
 	public static boolean storePiece(Peer p, int piece_index, int piece_begin, byte [] block)
 	{
-		int fileOffset = (piece_index * torrentFile.piece_length) + piece_begin + p.blockRequest.bytesRead; 
+		long fileOffset = (piece_index * ((long)torrentFile.piece_length)) + piece_begin + p.blockRequest.bytesRead;
 		try
 		{
 			destinationFile.seek(fileOffset);
@@ -1620,7 +1638,8 @@ public class BitTortoise
 		return true;
 	}
 	
-	public static boolean processPieceMessage(Peer p, int piece_index, int block_begin, byte[] block) {
+	public static boolean processPieceMessage(Peer p, int piece_index, int block_begin, byte[] block)
+	{
 		// Update the number of bytes read this round for this peer:
 		p.bytesReadThisRound += block.length;
 		BitTortoise.totalDownloaded += block.length;
@@ -1629,16 +1648,18 @@ public class BitTortoise
 		p.blockRequest.timeModified = (new Date()).getTime();
 		
 		// Do other stuff (by KENNY!):
-		if (!storePiece(p, piece_index, block_begin, block)) {
+		if(!storePiece(p, piece_index, block_begin, block))
+		{
 			return false;
 		}
 		p.blockRequest.bytesRead += block.length;
-		if (p.blockRequest.bytesRead >= p.blockRequest.length) { //if done reading block
+		if(p.blockRequest.bytesRead >= p.blockRequest.length) //if done reading block
+		{
 			p.blockRequest.status = BlockRequest.FINISHED;
 			p.blockRequest = null; //this peer is open to receive a new block
-			if (outstandingPieces.get(piece_index).allFinished())
+			if(outstandingPieces.get(piece_index).allFinished())
 			{
-				if (Arrays.equals(BitTortoise.getSha1FromFile(piece_index, BitTortoise.totalPieceCount, BitTortoise.destinationFile, BitTortoise.torrentFile), (byte[])BitTortoise.torrentFile.piece_hash_values_as_binary.get(piece_index)))
+				if(Arrays.equals(BitTortoise.getSha1FromFile(piece_index, BitTortoise.totalPieceCount, BitTortoise.destinationFile, BitTortoise.torrentFile), (byte[])BitTortoise.torrentFile.piece_hash_values_as_binary.get(piece_index)))
 				{
 					Piece temp = BitTortoise.outstandingPieces.remove(piece_index);
 					BitTortoise.rarity.remove(temp);
@@ -1666,13 +1687,13 @@ public class BitTortoise
 	{
 		byte[] entirePiece;
 		if(index == pieceCount - 1)
-			entirePiece = new byte[tf.file_length - (pieceCount - 1) * tf.piece_length]; //this is a HUGE array, is there a better way to do this?
+			entirePiece = new byte[tf.file_length - (index) * tf.piece_length]; //this is a HUGE array, is there a better way to do this?
 		else
 			entirePiece = new byte[tf.piece_length]; //this is a HUGE array, is there a better way to do this?
 		byte[] mySHA1;
 		try
 		{
-			destinationFile.seek(index * tf.piece_length);
+			destinationFile.seek(index * ((long)tf.piece_length));
 			if(index == pieceCount - 1)
 			{
 				raf.read(entirePiece, 0, tf.file_length - (pieceCount - 1) * tf.piece_length);
@@ -1696,9 +1717,9 @@ public class BitTortoise
 	{
 		for(int i = 0; i < BitTortoise.totalPieceCount; i += 25)
 		{
-			for(int j = 0; (j < 25) && (i*25 + j < BitTortoise.totalPieceCount); j ++)
+			for(int j = 0; (j < 25) && (i + j < BitTortoise.totalPieceCount); j ++)
 			{
-				System.out.print((BitTortoise.completedPieces.get(i*25 + j)? "*" : "." ));
+				System.out.print((BitTortoise.completedPieces.get(i + j)? "*" : "." ));
 			}
 			System.out.println();
 		}
