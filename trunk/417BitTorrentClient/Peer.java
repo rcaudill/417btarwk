@@ -86,7 +86,8 @@ public class Peer
 	 * @param ip IP address for the specific peer
 	 * @param port Port to use when contacting the specific peer
 	 */
-	public Peer(byte[] info_hash, byte[] peer_id, byte[] my_peer_id, String ip, int port) {
+	public Peer(byte[] info_hash, byte[] peer_id, byte[] my_peer_id, String ip, int port)
+	{
 		// Client connections start out as "choked" and "not interested"
 		this.am_choking = true;
 		this.am_interested = false;
@@ -130,12 +131,8 @@ public class Peer
 			System.exit(1);
 		}
 		
-		String s = "";
-		for (int i=0; i<8; i++) {
-			s += this.peer_id[i];
-		}
-		isBitTortoisePeer = s.equals("-BT0001-");
-		
+		if(this.peer_id != null)
+			this.isBitTortoisePeer = new String(this.peer_id).startsWith("-BT0001-");
 		
 		try
 		{
@@ -249,6 +246,27 @@ public class Peer
 				}
 				
 				this.lastMessageSentTime = (new Date()).getTime();
+			}
+			catch(IOException e)
+			{
+				return false;
+			}
+		}
+		else if(!this.handshake_sent)
+		{
+			// We have not yet sent them a handshake, do so now:
+			try
+			{
+				this.sendBuffer = ByteBuffer.wrap(this.handshake);
+				int sent = sc.write(this.sendBuffer);
+				this.unsent = this.handshake.length - sent;
+				
+				this.lastMessageSentTime = (new Date()).getTime();
+				
+				this.handshake_sent = true;
+				
+				if(BitTortoise.verbose)
+					System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + this.ip + ":" + this.port + "): Sent Handshake message.");
 			}
 			catch(IOException e)
 			{
@@ -452,7 +470,7 @@ public class Peer
 							}
 						}
 					}
-					else if(!this.am_choking && this.receiveRequests.size() != 0)
+					if(!this.am_choking && this.receiveRequests.size() != 0)
 					{
 						// Respond to a request for data with a Piece message
 						try
@@ -479,6 +497,8 @@ public class Peer
 							
 							if(BitTortoise.verbose)
 								System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + this.ip + ":" + this.port + "): Sent Piece (" + br.piece + "," + br.offset + "," + br.length + ") message.");
+							
+							return true;
 						}
 						catch(IOException e)
 						{
@@ -565,27 +585,6 @@ public class Peer
 				}
 				this.sent_bitfield = true;
 			}
-			else if(!this.handshake_sent)
-			{
-				// We have not yet sent them a handshake in response to their handshake, do so now:
-				try
-				{
-					this.sendBuffer = ByteBuffer.wrap(this.handshake);
-					int sent = sc.write(this.sendBuffer);
-					this.unsent = this.handshake.length - sent;
-					
-					this.lastMessageSentTime = (new Date()).getTime();
-					
-					this.handshake_sent = true;
-					
-					if(BitTortoise.verbose)
-						System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + this.ip + ":" + this.port + "): Sent Handshake message.");
-				}
-				catch(IOException e)
-				{
-					return false;
-				}
-			}
 		}
 		
 		return true;
@@ -597,12 +596,15 @@ public class Peer
 		int i=0;
 		boolean madeChanges = false;
 		//make the rarest pieces first
+		Collections.shuffle(rarity);
 		Collections.sort(rarity, new rarityComparator());
 		int rareSize = rarity.size();
-		while(i < rareSize && this.sendRequests.size() < ((BitTortoise.useExtenstions)? (this.myMaxRequests) : (BitTortoise.MAX_OUTSTANDING_REQUESTS))){
+		while(i < rareSize && this.sendRequests.size() < ((BitTortoise.useExtenstions)? (this.myMaxRequests) : (BitTortoise.MAX_OUTSTANDING_REQUESTS)))
+		{
 			int piecenum = rarity.get(i).pieceNum;
 			//if the peer contains this rare piece, fill requests, else increment i to go to the next rarest piece
-			if(this.completedPieces.get(piecenum)){
+			if(this.completedPieces.get(piecenum))
+			{
 				for(BlockRequest br : rarity.get(i).blocks)
 				{
 					if(this.sendRequests.size() == ((BitTortoise.useExtenstions)? (this.myMaxRequests) : (BitTortoise.MAX_OUTSTANDING_REQUESTS)))

@@ -27,6 +27,7 @@ public class BitTortoise
 	public static final int MAX_OUTSTANDING_REQUESTS = 200;
 	public static final int MIN_OUTSTANDING_REQUESTS = 5;
 	public static final int OUTSTANDING_REQUEST_RATE = 2;
+	public static final int NUM_TO_UNCHOKE = 3;
 	public static final int numToGet = 100; // try to get 100 total peers from the tracker for the list
 	
 	private static TorrentFile torrentFile; // the object into which the .torrent file is b-decoded
@@ -37,14 +38,20 @@ public class BitTortoise
 	private static BitSet completedPieces; // Whether the Pieces/blocks of the file are completed or not
 	private static BitSet inProgress;
 	private static long lastTrackerCommunication;
+	private static Map<SocketChannel, Peer> activePeerMap;
+	private static Map<SocketChannel, Peer> pendingPeerMap;
 	public static long totalUploaded;
 	public static long totalDownloaded;
+	
+	public static int numUnchoked;
 	
 	private static boolean isIncomplete;
 	private static boolean continueSeeding;
 	private static boolean quitNotReceived;
 	private static boolean initialSeeding;
 	public static int totalPieceCount;
+	private static long startT;
+	private static long finishT;
 	
 	/**
 	 * Usage: "java BitTortoise <torrent_file> [-d <destination_file>] [-p <port>] [-v] [-s] [-c] [-n] [-r <bit tortoise resume info file>]" 
@@ -74,8 +81,6 @@ public class BitTortoise
 			my_key += Integer.toHexString((int)(Math.random() * 16.0));
 		
 		Tracker tracker = null;
-		long startT;
-		long finishT;
 		BitTortoise.initialSeeding = false;
 		BitTortoise.continueSeeding = false;
 		BitTortoise.isIncomplete = true;
@@ -89,8 +94,8 @@ public class BitTortoise
 		
 		// State variables:
 		BitTortoise.totalPieceCount = 0;
-		Map<SocketChannel, Peer> activePeerMap = new HashMap<SocketChannel, Peer>();
-		Map<SocketChannel, Peer> pendingPeerMap = new HashMap<SocketChannel, Peer>();
+		activePeerMap = new HashMap<SocketChannel, Peer>();
+		pendingPeerMap = new HashMap<SocketChannel, Peer>();
 		
 		
 		
@@ -434,6 +439,7 @@ public class BitTortoise
 		
 		// Start the main loop of the client - choose and connect to peers, accept connections from peers, attempt to get all of the file
 		numConnections = 0;
+		numUnchoked = 0;
 		try
 		{
 			// Create the selector:
@@ -494,82 +500,7 @@ public class BitTortoise
 				// to opt unchoke.
 				if (((elapsedTimeMS % (10000)) == 0) && (elapsedTimeMS != 0))
 				{
-					ArrayList<Peer> possiblePeers = new ArrayList<Peer>();
-					for(Map.Entry<SocketChannel, Peer> e : activePeerMap.entrySet())
-					{
-						if(e.getValue() != null)
-						{
-							possiblePeers.add(e.getValue());
-						}
-					}
-					
-					// sorts it based on bytesReadThisRound 
-					// To avoid Array OOB errors, make sure there are at least 3, otherwise unchoke all
-					Collections.sort(possiblePeers, new topThreeComparator());
-					if(possiblePeers.size() > 3)
-					{
-						// Unchoke the top 3 peers that are sending us stuff, regardless... also make sure that there are (top) 3 interested peers unchoked
-						int interested = 0;
-						if(possiblePeers.get(0).peer_interested)
-							interested++;
-						if(possiblePeers.get(1).peer_interested)
-							interested++;
-						if(possiblePeers.get(2).peer_interested)
-							interested++;
-						
-						possiblePeers.get(0).shouldUnchoke = true;
-						possiblePeers.get(1).shouldUnchoke = true;
-						possiblePeers.get(2).shouldUnchoke = true;
-						
-						int index = 3;
-						while(interested < 3 && index < possiblePeers.size())
-						{
-							if(possiblePeers.get(index).peer_interested)
-							{
-								possiblePeers.get(index).shouldUnchoke = true;
-								interested++;
-							}
-							index ++;
-						}
-						
-						// get one to randomly unchoke
-						int optimisticUnchokeIndex = (int)(Math.random() * (possiblePeers.size() - 3));
-						optimisticUnchokeIndex = optimisticUnchokeIndex + 3;
-						if(optimisticUnchokeIndex > 0 && optimisticUnchokeIndex < possiblePeers.size() && !possiblePeers.get(optimisticUnchokeIndex).shouldUnchoke && possiblePeers.get(optimisticUnchokeIndex).am_choking)
-							possiblePeers.get(optimisticUnchokeIndex).shouldUnchoke = true;
-					}
-					else
-					{
-						for(Peer p : possiblePeers)
-						{
-							p.shouldUnchoke = true;
-						}
-					}
-					// go through and set the peers as choked if they aren't already
-					for (int j = 0; j < possiblePeers.size(); j++)
-					{
-						Peer p = possiblePeers.get(j);
-						if (p.am_choking == false && p.shouldUnchoke == false)
-						{
-							p.shouldChoke = true;
-						}
-						else
-						{
-							p.shouldChoke = false;
-						}
-						
-						if(p.am_choking == false && p.shouldUnchoke == true)
-						{
-							p.shouldUnchoke = false;
-						}
-						
-						if(p.am_choking == true  && p.shouldChoke == true)
-						{
-							p.shouldChoke = false;
-						}
-						p.finalizeRound();
-					}
-					startT = new Date().getTime();
+					unchokePeers();
 					
 					printStatus();
 				}
@@ -629,19 +560,20 @@ public class BitTortoise
 								{
 									if(sc.finishConnect())
 									{
+										if(BitTortoise.verbose)
+											System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Outgoing connection finished.");
+										
 										sc.register(select, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
 										
 										pendingPeerMap.remove(sc);
 										activePeerMap.put(sc, p);
-										
+										/*
 										// Send handshake message to the peer:
 										sc.write(ByteBuffer.wrap(p.handshake));
 										
 										// Update situation:
 										p.handshake_sent = true;
-										
-										if(BitTortoise.verbose)
-											System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + p.ip + ":" + p.port + "): Outgoing connection finished.");
+										*/
 									}
 									else
 									{
@@ -774,7 +706,7 @@ public class BitTortoise
 											connectedTo.readBuffer = buf;
 
 											if(BitTortoise.verbose)
-												System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + connectedTo.ip + ":" + connectedTo.port + "): Received handshake.");
+												System.out.println(((new SimpleDateFormat("[kk:mm:ss]")).format(new Date())) + ": (" + connectedTo.ip + ":" + connectedTo.port + "): Received Handshake message.");
 										}
 										
 										if(size != 0)
@@ -1292,6 +1224,9 @@ public class BitTortoise
 					// Handle Interested message:
 					p.peer_interested = true;
 					
+					if(numUnchoked < BitTortoise.NUM_TO_UNCHOKE)
+						BitTortoise.unchokePeers();
+					
 					// Perform state cleanup:
 					p.readBuffer.position(5);
 					p.readBuffer.compact();
@@ -1384,12 +1319,14 @@ public class BitTortoise
 						newReport.andNot(previousReport);
 						
 						//update rarity of pieces
-						for(int i=newReport.nextSetBit(0);i<=0;i=newReport.nextSetBit(i+1))
+						int i = newReport.nextSetBit(0);
+						while(i>0)
 						{
 							if(outstandingPieces.containsKey(i))
 							{
 								outstandingPieces.get(i).commonality++;
 							}
+							i = newReport.nextSetBit(i+1);
 						}
 						
 						// Set us to interested if they have something we want (and we are not already interested):
@@ -1725,5 +1662,86 @@ public class BitTortoise
 		}
 		System.out.println("Received: " + BitTortoise.totalDownloaded + " bytes of file data.");
 		System.out.println("Sent: " + BitTortoise.totalUploaded + " bytes of file data.");
+	}
+	
+	public static void unchokePeers()
+	{
+		ArrayList<Peer> possiblePeers = new ArrayList<Peer>();
+		for(Map.Entry<SocketChannel, Peer> e : activePeerMap.entrySet())
+		{
+			if(e.getValue() != null)
+			{
+				possiblePeers.add(e.getValue());
+			}
+		}
+		
+		// sorts it based on bytesReadThisRound 
+		// To avoid Array OOB errors, make sure there are at least 3, otherwise unchoke all
+		Collections.sort(possiblePeers, new topThreeComparator());
+		if(possiblePeers.size() > NUM_TO_UNCHOKE)
+		{
+			// Unchoke the top 3 peers that are sending us stuff, regardless... also make sure that there are (top) 3 interested peers unchoked
+			int interested = 0;
+			for(int i = 0; i < NUM_TO_UNCHOKE; i ++)
+			{
+				if(possiblePeers.get(i).peer_interested)
+					interested ++;
+				possiblePeers.get(i).shouldUnchoke = true;
+			}
+			
+			numUnchoked = NUM_TO_UNCHOKE;
+			
+			int index = NUM_TO_UNCHOKE;
+			while(interested < NUM_TO_UNCHOKE && index < possiblePeers.size())
+			{
+				if(possiblePeers.get(index).peer_interested)
+				{
+					numUnchoked ++;
+					possiblePeers.get(index).shouldUnchoke = true;
+					interested ++;
+				}
+				index ++;
+			}
+			
+			// get one to randomly unchoke
+			int optimisticUnchokeIndex = (int)(Math.random() * (possiblePeers.size() - NUM_TO_UNCHOKE));
+			optimisticUnchokeIndex = optimisticUnchokeIndex + NUM_TO_UNCHOKE;
+			if(optimisticUnchokeIndex > 0 && optimisticUnchokeIndex < possiblePeers.size() && !possiblePeers.get(optimisticUnchokeIndex).shouldUnchoke && possiblePeers.get(optimisticUnchokeIndex).am_choking)
+				possiblePeers.get(optimisticUnchokeIndex).shouldUnchoke = true;
+		}
+		else
+		{
+			numUnchoked = 0;
+			for(Peer p : possiblePeers)
+			{
+				numUnchoked ++;
+				p.shouldUnchoke = true;
+			}
+		}
+		// go through and set the peers as choked if they aren't already
+		for (int j = 0; j < possiblePeers.size(); j++)
+		{
+			Peer p = possiblePeers.get(j);
+			if (p.am_choking == false && p.shouldUnchoke == false)
+			{
+				p.shouldChoke = true;
+			}
+			else
+			{
+				p.shouldChoke = false;
+			}
+			
+			if(p.am_choking == false && p.shouldUnchoke == true)
+			{
+				p.shouldUnchoke = false;
+			}
+			
+			if(p.am_choking == true  && p.shouldChoke == true)
+			{
+				p.shouldChoke = false;
+			}
+			p.finalizeRound();
+		}
+		startT = new Date().getTime();
 	}
 }

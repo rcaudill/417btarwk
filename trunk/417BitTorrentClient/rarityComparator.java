@@ -13,11 +13,15 @@ public class rarityComparator implements Comparator<Piece> {
 		}
 		
 		//the more common the piece the less rare it is
-		if(p1.commonality > p2.commonality){
+		if(p1.commonality > p2.commonality)
+		{
 			return 1;
-		}else if(p1.commonality < p2.commonality){
+		}
+		else if(p1.commonality < p2.commonality)
+		{
 			return -1;
-		}else
+		}
+		else
 			return 0;
 	}
 
