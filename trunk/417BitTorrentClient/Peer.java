@@ -211,7 +211,7 @@ public class Peer
 		{
 			Peer other = (Peer)o;
 			
-			return (other.ip.equals(this.ip));
+			return (Arrays.equals(other.peer_id, this.peer_id));
 		}
 		return false;
 	}
